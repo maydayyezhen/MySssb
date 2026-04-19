@@ -1,5 +1,8 @@
 import json
 from pathlib import Path
+
+import numpy as np
+import matplotlib.pyplot as plt
 from tensorflow.keras import layers, models, callbacks
 
 from dataset_loader import (
@@ -8,6 +11,104 @@ from dataset_loader import (
     print_label_distribution
 )
 
+def plot_training_history(history, save_dir: Path):
+    """绘制并保存训练曲线图。"""
+    train_acc_key = "accuracy" if "accuracy" in history.history else "acc"
+    val_acc_key = "val_accuracy" if "val_accuracy" in history.history else "val_acc"
+
+    plt.figure(figsize=(10, 6))
+
+    # loss 曲线
+    plt.plot(history.history["loss"], label="train_loss")
+    plt.plot(history.history["val_loss"], label="val_loss")
+
+    # accuracy 曲线
+    plt.plot(history.history[train_acc_key], label="train_acc")
+    plt.plot(history.history[val_acc_key], label="val_acc")
+
+    plt.xlabel("Epoch")
+    plt.ylabel("Value")
+    plt.title("Training History")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+
+    save_path = save_dir / "training_curve.png"
+    plt.savefig(save_path, dpi=200)
+    print(f"训练曲线图已保存到：{save_path}")
+
+    # 本地跑脚本时弹窗展示
+    plt.show()
+
+
+def evaluate_on_validation(model, X_val, y_val, label_map, save_dir: Path):
+    """在验证集上做简单评估，并保存结果与混淆矩阵。"""
+    reverse_label_map = {v: k for k, v in label_map.items()}
+    num_classes = len(label_map)
+
+    # 预测
+    probs = model.predict(X_val, verbose=0)
+    y_pred = np.argmax(probs, axis=1)
+
+    # 总体准确率
+    overall_acc = float(np.mean(y_pred == y_val))
+
+    # 混淆矩阵（numpy 版，不依赖 sklearn）
+    cm = np.zeros((num_classes, num_classes), dtype=np.int32)
+    for true_id, pred_id in zip(y_val, y_pred):
+        cm[int(true_id), int(pred_id)] += 1
+
+    # 每类准确率
+    per_class_lines = []
+    for class_id in range(num_classes):
+        class_name = reverse_label_map[class_id]
+        total = int(np.sum(cm[class_id]))
+        correct = int(cm[class_id, class_id])
+        class_acc = correct / total if total > 0 else 0.0
+        per_class_lines.append((class_name, correct, total, class_acc))
+
+    # 打印结果
+    print("\n===== 验证集评估结果 =====")
+    print(f"整体准确率: {overall_acc:.4f}")
+    for class_name, correct, total, class_acc in per_class_lines:
+        print(f"{class_name}: {correct}/{total} = {class_acc:.4f}")
+
+    # 保存文字结果
+    eval_txt_path = save_dir / "eval_result.txt"
+    with open(eval_txt_path, "w", encoding="utf-8") as f:
+        f.write("===== 验证集评估结果 =====\n")
+        f.write(f"整体准确率: {overall_acc:.4f}\n\n")
+        for class_name, correct, total, class_acc in per_class_lines:
+            f.write(f"{class_name}: {correct}/{total} = {class_acc:.4f}\n")
+        f.write("\n===== 混淆矩阵 =====\n")
+        f.write(str(cm))
+
+    print(f"评估结果已保存到：{eval_txt_path}")
+
+    # 绘制混淆矩阵
+    plt.figure(figsize=(8, 6))
+    plt.imshow(cm, cmap="Blues")
+    plt.colorbar()
+
+    class_names = [reverse_label_map[i] for i in range(num_classes)]
+    plt.xticks(range(num_classes), class_names, rotation=45)
+    plt.yticks(range(num_classes), class_names)
+
+    # 在格子里写数值
+    for i in range(num_classes):
+        for j in range(num_classes):
+            plt.text(j, i, str(cm[i, j]), ha="center", va="center")
+
+    plt.xlabel("Predicted Label")
+    plt.ylabel("True Label")
+    plt.title("Confusion Matrix")
+    plt.tight_layout()
+
+    cm_path = save_dir / "confusion_matrix.png"
+    plt.savefig(cm_path, dpi=200)
+    print(f"混淆矩阵图已保存到：{cm_path}")
+
+    plt.show()
 
 def build_model(input_shape, num_classes):
     """构建一个最小可跑的 1D CNN。"""
@@ -78,12 +179,18 @@ def main():
         callbacks=[early_stop]
     )
 
-    # 5. 保存模型和标签映射
+    # 5. 创建输出目录
     save_dir = Path("artifacts")
     save_dir.mkdir(parents=True, exist_ok=True)
 
-    model.save(save_dir / "gesture_cnn.keras")
+    # 6. 绘图
+    plot_training_history(history, save_dir)
 
+    # 7. 评估
+    evaluate_on_validation(model, X_val, y_val, label_map, save_dir)
+
+    # 8. 保存模型和标签映射
+    model.save(save_dir / "gesture_cnn.keras")
     with open(save_dir / "label_map.json", "w", encoding="utf-8") as f:
         json.dump(label_map, f, ensure_ascii=False, indent=2)
 
