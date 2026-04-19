@@ -113,18 +113,3 @@ def print_label_distribution(name, y, label_map):
     print(f"{name} 标签分布：")
     for label_id, count in zip(unique, counts):
         print(f"  {reverse_label_map[label_id]}: {count}")
-
-
-if __name__ == "__main__":
-    data_root = "data_processed"
-
-    X, y, label_map = load_dataset(data_root)
-    X_train, y_train, X_val, y_val = split_dataset_stratified(X, y)
-
-    print("X_train shape =", X_train.shape)
-    print("y_train shape =", y_train.shape)
-    print("X_val shape =", X_val.shape)
-    print("y_val shape =", y_val.shape)
-
-    print_label_distribution("训练集", y_train, label_map)
-    print_label_distribution("验证集", y_val, label_map)

@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tensorflow.keras import layers, models, callbacks
 
-from dataset_loader import (
+from src.utils.dataset_loader import (
     load_dataset,
     split_dataset_stratified,
     print_label_distribution
