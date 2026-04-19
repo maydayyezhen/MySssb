@@ -1,0 +1,8 @@
+{
+  "away": 0,
+  "call": 1,
+  "come": 2,
+  "hello": 3,
+  "thank_you": 4,
+  "unknown": 5
+}
