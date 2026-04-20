@@ -7,3 +7,9 @@ opencv-python==4.11.0.86
 numpy==1.26.4
 
 matplotlib==3.10.8
+
+fastapi
+
+uvicorn==0.44.0
+
+websockets
