@@ -5,6 +5,7 @@ from pathlib import Path
 
 from utils.hand_features import build_frame_feature, extract_palm_center, extract_palm_scale
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 def get_next_sample_index(save_dir: Path) -> int:
     """获取下一个样本编号。"""
@@ -53,7 +54,7 @@ def main():
     # ========= 可改参数 =========
     window_size = 30
     camera_index = 0
-    save_root = Path("data_processed")
+    save_root = PROJECT_ROOT / "data_processed"
 
     label_name = input("请输入当前采集的手势标签：").strip()
     if not label_name:

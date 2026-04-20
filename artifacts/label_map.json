@@ -3,6 +3,7 @@
   "call": 1,
   "come": 2,
   "hello": 3,
-  "thank_you": 4,
-  "unknown": 5
+  "ok": 4,
+  "thank_you": 5,
+  "unknown": 6
 }

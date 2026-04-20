@@ -11,6 +11,8 @@ from src.utils.dataset_loader import (
     print_label_distribution
 )
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 def plot_training_history(history, save_dir: Path):
     """绘制并保存训练曲线图。"""
     train_acc_key = "accuracy" if "accuracy" in history.history else "acc"
@@ -136,7 +138,7 @@ def build_model(input_shape, num_classes):
 
 
 def main():
-    data_root = "data_processed"
+    data_root = PROJECT_ROOT / "data_processed"
 
     # 1. 读取数据
     X, y, label_map = load_dataset(data_root)
@@ -180,7 +182,7 @@ def main():
     )
 
     # 5. 创建输出目录
-    save_dir = Path("artifacts")
+    save_dir = PROJECT_ROOT / "artifacts"
     save_dir.mkdir(parents=True, exist_ok=True)
 
     # 6. 绘图

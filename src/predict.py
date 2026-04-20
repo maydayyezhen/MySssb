@@ -1,3 +1,4 @@
+from pathlib import Path
 import json
 from collections import deque
 
@@ -6,7 +7,16 @@ import mediapipe as mp
 import numpy as np
 import tensorflow as tf
 
-from utils.hand_features import build_frame_feature, extract_palm_center, extract_palm_scale
+try:
+    from src.utils.hand_features import build_frame_feature, extract_palm_center, extract_palm_scale
+except ImportError:
+    from utils.hand_features import build_frame_feature, extract_palm_center, extract_palm_scale
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
+DEFAULT_MODEL_PATH = ARTIFACTS_DIR / "gesture_cnn.keras"
+DEFAULT_LABEL_MAP_PATH = ARTIFACTS_DIR / "label_map.json"
 
 
 
@@ -20,24 +30,29 @@ def load_label_map(label_map_path: str):
 
 
 class GesturePredictSession:
-    """手势实时预测会话。负责维护模型、MediaPipe 和滑动窗口状态。"""
-
     def __init__(
         self,
-        model_path: str = "artifacts/gesture_cnn.keras",
-        label_map_path: str = "artifacts/label_map.json",
+        model_path=None,
+        label_map_path=None,
         window_size: int = 30,
         confidence_threshold: float = 0.7,
         max_missing_frames: int = 10,
     ):
-        # ========= 配置 =========
         self.window_size = window_size
         self.confidence_threshold = confidence_threshold
         self.max_missing_frames = max_missing_frames
 
-        # ========= 模型与标签 =========
-        self.model = tf.keras.models.load_model(model_path)
-        _, self.reverse_label_map = load_label_map(label_map_path)
+        model_path = Path(model_path) if model_path else DEFAULT_MODEL_PATH
+        label_map_path = Path(label_map_path) if label_map_path else DEFAULT_LABEL_MAP_PATH
+
+        if not model_path.exists():
+            raise FileNotFoundError(f"模型文件不存在：{model_path}")
+
+        if not label_map_path.exists():
+            raise FileNotFoundError(f"标签映射文件不存在：{label_map_path}")
+
+        self.model = tf.keras.models.load_model(str(model_path))
+        _, self.reverse_label_map = load_label_map(str(label_map_path))
 
         # ========= MediaPipe =========
         self.mp_hands = mp.solutions.hands
@@ -101,6 +116,7 @@ class GesturePredictSession:
 
         has_valid_hand = False
         status = "no_hand"
+        landmarks = None
 
         # 只有同时拿到 image/world landmarks 才算有效帧
         if results.multi_hand_landmarks and results.multi_hand_world_landmarks:
@@ -109,6 +125,14 @@ class GesturePredictSession:
 
             first_hand_landmarks = results.multi_hand_landmarks[0]
             first_hand_world_landmarks = results.multi_hand_world_landmarks[0]
+
+            landmarks = []
+            for lm in first_hand_landmarks.landmark:
+                landmarks.append({
+                    "x": float(lm.x),
+                    "y": float(lm.y),
+                    "z": float(lm.z),
+                })
 
             # 单帧 78 维主特征
             frame_feature = build_frame_feature(first_hand_world_landmarks)
@@ -161,4 +185,5 @@ class GesturePredictSession:
             "has_valid_hand": has_valid_hand,
             "valid_frames": len(self.feature_window),
             "window_size": self.window_size,
+            "landmarks": landmarks,
         }

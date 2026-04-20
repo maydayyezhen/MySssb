@@ -71,8 +71,8 @@ def draw_overlay(frame, result: dict):
 def main():
     # ========= 可改参数 =========
     camera_index = 0
-    model_path = "artifacts/gesture_cnn.keras"
-    label_map_path = "artifacts/label_map.json"
+    model_path = "../artifacts/gesture_cnn.keras"
+    label_map_path = "../artifacts/label_map.json"
     window_size = 30
     confidence_threshold = 0.7
     max_missing_frames = 10
