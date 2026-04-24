@@ -117,13 +117,13 @@ def build_model(input_shape, num_classes):
     model = models.Sequential([
         layers.Input(shape=input_shape),              # (30, 80)
 
-        layers.Conv1D(64, kernel_size=3, activation="relu", padding="same"),
+        layers.Conv1D(96, kernel_size=3, activation="relu", padding="same"),
         layers.MaxPooling1D(pool_size=2),
 
-        layers.Conv1D(128, kernel_size=3, activation="relu", padding="same"),
+        layers.Conv1D(160, kernel_size=3, activation="relu", padding="same"),
         layers.GlobalAveragePooling1D(),
 
-        layers.Dense(64, activation="relu"),
+        layers.Dense(96, activation="relu"),
         layers.Dropout(0.3),
 
         layers.Dense(num_classes, activation="softmax")
@@ -138,7 +138,7 @@ def build_model(input_shape, num_classes):
 
 
 def main():
-    data_root = PROJECT_ROOT / "data_processed"
+    data_root = PROJECT_ROOT / "data_processed_twohand"
 
     # 1. 读取数据
     X, y, label_map = load_dataset(data_root)
@@ -192,8 +192,8 @@ def main():
     evaluate_on_validation(model, X_val, y_val, label_map, save_dir)
 
     # 8. 保存模型和标签映射
-    model.save(save_dir / "gesture_cnn.keras")
-    with open(save_dir / "label_map.json", "w", encoding="utf-8") as f:
+    model.save(save_dir / "gesture_cnn_twohand.keras")
+    with open(save_dir / "label_map_twohand.json", "w", encoding="utf-8") as f:
         json.dump(label_map, f, ensure_ascii=False, indent=2)
 
     print("\n模型已保存到：", save_dir / "gesture_cnn.keras")

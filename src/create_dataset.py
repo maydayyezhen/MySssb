@@ -3,7 +3,7 @@ import mediapipe as mp
 import numpy as np
 from pathlib import Path
 
-from utils.hand_features import build_frame_feature, extract_palm_center, extract_palm_scale
+from utils.hand_features import extract_two_hand_frame_parts, build_two_hand_sample
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -54,7 +54,7 @@ def main():
     # ========= 可改参数 =========
     window_size = 30
     camera_index = 0
-    save_root = PROJECT_ROOT / "data_processed"
+    save_root = PROJECT_ROOT / "data_processed_twohand"
 
     label_name = input("请输入当前采集的手势标签：").strip()
     if not label_name:
@@ -91,10 +91,8 @@ def main():
     # confirm: 等待确认保存
     state = "idle"
 
-    current_frames = []
-    current_centers = []
     pending_sample = None
-    start_motion_scale = None
+    current_frame_parts = []
 
     while True:
         success, frame = cap.read()
@@ -121,26 +119,13 @@ def main():
 
         # 采集中：只有同时检测到 image/world landmarks 才累计一帧
         if state == "collecting":
-            if results.multi_hand_landmarks and results.multi_hand_world_landmarks:
-                first_hand_landmarks = results.multi_hand_landmarks[0]
-                first_hand_world_landmarks = results.multi_hand_world_landmarks[0]
+            frame_parts = extract_two_hand_frame_parts(results, swap_handedness=False)
 
-                frame_feature = build_frame_feature(first_hand_world_landmarks)
-                palm_center = extract_palm_center(first_hand_landmarks)
+            if frame_parts is not None:
+                current_frame_parts.append(frame_parts)
 
-                if len(current_frames) == 0:
-                    start_motion_scale = extract_palm_scale(first_hand_landmarks)
-
-                current_frames.append(frame_feature)
-                current_centers.append(palm_center)
-
-                if len(current_frames) == window_size:
-                    base_sample = np.array(current_frames, dtype=np.float32)  # (30, 78)
-                    centers = np.array(current_centers, dtype=np.float32)  # (30, 2)
-
-                    motion = (centers - centers[0]) / start_motion_scale  # (30, 2)
-                    pending_sample = np.concatenate([base_sample, motion], axis=1).astype(np.float32)  # (30, 80)
-
+                if len(current_frame_parts) == window_size:
+                    pending_sample = build_two_hand_sample(current_frame_parts)
                     state = "confirm"
 
         # 状态文字
@@ -155,7 +140,7 @@ def main():
             label_name=label_name,
             saved_count=saved_count,
             state=display_state,
-            collected_count=len(current_frames) if state == "collecting" else (window_size if state == "confirm" else 0),
+            collected_count=len(current_frame_parts) if state == "collecting" else (window_size if state == "confirm" else 0),
             window_size=window_size
         )
 
@@ -181,10 +166,8 @@ def main():
 
         # 待机 -> 开始采集
         elif key == ord("s") and state == "idle":
-            current_frames = []
-            current_centers = []
+            current_frame_parts = []
             pending_sample = None
-            start_motion_scale = None
             state = "collecting"
             print(f"开始采集标签 [{label_name}] 的一个样本。")
 
@@ -197,19 +180,15 @@ def main():
             saved_count += 1
             print(f"样本已保存：{save_path}")
 
-            current_frames = []
-            current_centers = []
+            current_frame_parts = []
             pending_sample = None
-            start_motion_scale = None
             state = "idle"
 
         # 丢弃
         elif key == ord("n") and state == "confirm":
             print("当前样本已丢弃。")
-            current_frames = []
-            current_centers = []
+            current_frame_parts = []
             pending_sample = None
-            start_motion_scale = None
             state = "idle"
 
     cap.release()

@@ -1,6 +1,7 @@
 import numpy as np
 from pathlib import Path
 
+EXPECTED_SAMPLE_SHAPE = (30, 162)
 
 def load_dataset(data_root: str):
     """读取数据目录下的所有样本，并合并成训练用的大数组。
@@ -38,7 +39,7 @@ def load_dataset(data_root: str):
             sample = np.load(sample_file)
 
             # 检查 shape 是否符合预期
-            if sample.shape != (30, 80):
+            if sample.shape != EXPECTED_SAMPLE_SHAPE:
                 print(f"跳过异常样本：{sample_file}，shape = {sample.shape}")
                 continue
 
