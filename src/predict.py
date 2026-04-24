@@ -134,7 +134,7 @@ class GesturePredictSession:
                     "z": float(lm.z),
                 })
 
-            # 单帧 78 维主特征
+            # 单帧主特征
             frame_feature = build_frame_feature(first_hand_world_landmarks)
             palm_center = extract_palm_center(first_hand_landmarks)
             palm_scale = extract_palm_scale(first_hand_landmarks)
@@ -143,40 +143,48 @@ class GesturePredictSession:
             self.center_window.append(palm_center)
             self.scale_window.append(palm_scale)
 
-            # 窗口满 30 帧后开始预测
-            if len(self.feature_window) == self.window_size:
-                base_sample = np.array(self.feature_window, dtype=np.float32)   # (30, 78)
-                centers = np.array(self.center_window, dtype=np.float32)        # (30, 2)
+            # 有手但窗口未满：继续等待
+            if len(self.feature_window) < self.window_size:
+                status = "warming_up"
+                self.predicted_label = "Waiting..."
+                self.predicted_conf = 0.0
+            else:
+                base_sample = np.array(self.feature_window, dtype=np.float32)
+                centers = np.array(self.center_window, dtype=np.float32)
 
                 start_motion_scale = max(float(self.scale_window[0]), 1e-6)
-                motion = (centers - centers[0]) / start_motion_scale            # (30, 2)
+                motion = (centers - centers[0]) / start_motion_scale
 
-                sample = np.concatenate([base_sample, motion], axis=1).astype(np.float32)  # (30, 80)
-                sample = np.expand_dims(sample, axis=0)  # (1, 30, 80)
+                sample = np.concatenate([base_sample, motion], axis=1).astype(np.float32)
+                sample = np.expand_dims(sample, axis=0)
 
                 probs = self.model.predict(sample, verbose=0)[0]
                 pred_id = int(np.argmax(probs))
                 conf = float(probs[pred_id])
 
+                # 置信度够才算真正预测成功
                 if conf >= self.confidence_threshold:
                     self.predicted_label = self.reverse_label_map[pred_id]
                     self.predicted_conf = conf
+                    status = "predicted"
                 else:
-                    self.predicted_label = "Uncertain"
+                    # 有手但还不稳定，也继续等待
+                    self.predicted_label = "Waiting..."
                     self.predicted_conf = conf
-
-                status = "predicted"
-            else:
-                status = "warming_up"
+                    status = "warming_up"
 
         else:
+            # 当前帧没手：直接返回 no_hand
             self.missing_frames += 1
 
-            # 连续太久没检测到手，就清空窗口，防止旧窗口一直残留
+            # 连续太久没手时清空窗口，防止旧窗口残留
             if self.missing_frames >= self.max_missing_frames:
                 self.reset()
             else:
-                status = "missing_hand"
+                self.predicted_label = "Waiting..."
+                self.predicted_conf = 0.0
+
+            status = "no_hand"
 
         return {
             "status": status,
