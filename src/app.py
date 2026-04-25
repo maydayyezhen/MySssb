@@ -544,9 +544,11 @@ async def dataset_ws(websocket: WebSocket):
                 })
                 continue
 
-            # 和实时识别链路保持一致
-            frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-            frame = cv2.flip(frame, 1)
+            if ROTATE_PHONE_FRAME:
+                frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+            if FLIP_PHONE_FRAME:
+                frame = cv2.flip(frame, 1)
 
             frame_height, frame_width = frame.shape[:2]
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
