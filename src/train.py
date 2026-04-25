@@ -11,6 +11,12 @@ from src.utils.dataset_loader import (
     print_label_distribution
 )
 
+from src.config.gesture_config import (
+    DATA_DIR_NAME,
+    MODEL_FILE_NAME,
+    LABEL_MAP_FILE_NAME,
+)
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 def plot_training_history(history, save_dir: Path):
@@ -115,7 +121,7 @@ def evaluate_on_validation(model, X_val, y_val, label_map, save_dir: Path):
 def build_model(input_shape, num_classes):
     """构建一个最小可跑的 1D CNN。"""
     model = models.Sequential([
-        layers.Input(shape=input_shape),              # (30, 80)
+        layers.Input(shape=input_shape),              # 例如 (30, 166)
 
         layers.Conv1D(96, kernel_size=3, activation="relu", padding="same"),
         layers.MaxPooling1D(pool_size=2),
@@ -138,7 +144,7 @@ def build_model(input_shape, num_classes):
 
 
 def main():
-    data_root = PROJECT_ROOT / "data_processed_twohand"
+    data_root = PROJECT_ROOT / DATA_DIR_NAME
 
     # 1. 读取数据
     X, y, label_map = load_dataset(data_root)
@@ -159,7 +165,7 @@ def main():
     print_label_distribution("验证集", y_val, label_map)
 
     # 3. 建模
-    input_shape = X_train.shape[1:]   # (30, 80)
+    input_shape = X_train.shape[1:]   # 例如 (30, 166)
     num_classes = len(label_map)
 
     model = build_model(input_shape, num_classes)
@@ -192,12 +198,15 @@ def main():
     evaluate_on_validation(model, X_val, y_val, label_map, save_dir)
 
     # 8. 保存模型和标签映射
-    model.save(save_dir / "gesture_cnn_twohand.keras")
-    with open(save_dir / "label_map_twohand.json", "w", encoding="utf-8") as f:
+    model_path = save_dir / MODEL_FILE_NAME
+    label_map_path = save_dir / LABEL_MAP_FILE_NAME
+
+    model.save(model_path)
+    with open(label_map_path, "w", encoding="utf-8") as f:
         json.dump(label_map, f, ensure_ascii=False, indent=2)
 
-    print("\n模型已保存到：", save_dir / "gesture_cnn.keras")
-    print("标签映射已保存到：", save_dir / "label_map.json")
+    print("模型已保存到：", model_path)
+    print("标签映射已保存到：", label_map_path)
 
 
 if __name__ == "__main__":

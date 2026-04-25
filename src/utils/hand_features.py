@@ -1,8 +1,34 @@
 import numpy as np
 
+try:
+    from src.config.gesture_config import (
+        FEATURE_DIM,
+        POSE_VISIBILITY_THRESHOLD,
+        SWAP_HANDEDNESS,
+        SWAP_POSE_LR,
+    )
+except ImportError:
+    from config.gesture_config import (
+        FEATURE_DIM,
+        POSE_VISIBILITY_THRESHOLD,
+        SWAP_HANDEDNESS,
+        SWAP_POSE_LR,
+    )
+
+
+# =========================
+# 单手局部 3D 手型特征
+# =========================
+
 
 def build_frame_feature(hand_world_landmarks):
-    """使用 world landmarks 构造最终单帧特征，返回形状为 (78,) 的数组。"""
+    """使用 Hands world landmarks 构造单只手 78 维局部手型特征。
+
+    组成：
+    - 21 个 world landmarks × xyz = 63
+    - 15 个手指骨骼角度余弦 = 15
+    - 合计 78
+    """
 
     # 1. 提取 21 个 world landmarks，组成 (21, 3)
     points = []
@@ -11,14 +37,14 @@ def build_frame_feature(hand_world_landmarks):
 
     points_array = np.array(points, dtype=np.float32)
 
-    # 2. 做尺度归一化：使用 0 -> 9 的距离作为 scale
+    # 2. 做手部尺度归一化：使用 wrist(0) -> middle_mcp(9) 的距离作为 scale
     scale = np.linalg.norm(points_array[9] - points_array[0])
     if scale < 1e-6:
         scale = 1e-6
 
     points_array = points_array / scale
 
-    # 3. 构造骨骼向量
+    # 3. 构造 20 根骨骼向量
     parent_indices = [
         0, 1, 2, 3,
         0, 5, 6, 7,
@@ -40,7 +66,7 @@ def build_frame_feature(hand_world_landmarks):
     norms = np.where(norms == 0, 1e-6, norms)
     bone_vectors = bone_vectors / norms
 
-    # 4. 计算 15 个角度余弦值
+    # 4. 计算 15 个相邻骨骼夹角余弦
     angle_parent_indices = [
         0, 1, 2,
         4, 5, 6,
@@ -63,42 +89,11 @@ def build_frame_feature(hand_world_landmarks):
 
     angle_array = np.clip(angle_array, -1.0, 1.0)
 
-    # 5. 拼接成最终 78 维特征
+    # 5. 拼接成 78 维
     coord_feature = points_array.flatten().astype(np.float32)
     frame_feature = np.concatenate([coord_feature, angle_array]).astype(np.float32)
 
     return frame_feature
-
-def extract_palm_center(hand_landmarks):
-    """从 image landmarks 中提取掌心中心坐标，返回形状为 (2,) 的数组。"""
-    palm_indices = [0, 5, 9, 13, 17]
-
-    points = []
-    for idx in palm_indices:
-        landmark = hand_landmarks.landmark[idx]
-        points.append([landmark.x, landmark.y])
-
-    points_array = np.array(points, dtype=np.float32)
-    palm_center = np.mean(points_array, axis=0)
-
-    return palm_center.astype(np.float32)
-
-def extract_palm_scale(hand_landmarks):
-    """从 image landmarks 中提取掌部尺度，返回一个标量。"""
-    p0 = hand_landmarks.landmark[0]
-    p9 = hand_landmarks.landmark[9]
-
-    p0_xy = np.array([p0.x, p0.y], dtype=np.float32)
-    p9_xy = np.array([p9.x, p9.y], dtype=np.float32)
-
-    scale = np.linalg.norm(p9_xy - p0_xy)
-    return max(float(scale), 1e-6)
-
-# ========= 双手统一特征配置 =========
-
-SINGLE_HAND_BASE_DIM = 78
-SINGLE_HAND_FINAL_DIM = 80
-TWO_HAND_FEATURE_DIM = 162
 
 
 def normalize_handedness(label: str, swap_handedness: bool = False) -> str:
@@ -113,162 +108,229 @@ def normalize_handedness(label: str, swap_handedness: bool = False) -> str:
     return label
 
 
-def extract_two_hand_frame_parts(results, swap_handedness: bool = False):
-    """从 MediaPipe 结果中提取单帧双手中间特征。
+def resolve_pose_lr(PoseLandmark, swap_pose_lr: bool = SWAP_POSE_LR):
+    """根据配置决定 Pose 的左右语义映射。"""
+    if not swap_pose_lr:
+        return {
+            "LEFT_SHOULDER": PoseLandmark.LEFT_SHOULDER,
+            "RIGHT_SHOULDER": PoseLandmark.RIGHT_SHOULDER,
+            "LEFT_ELBOW": PoseLandmark.LEFT_ELBOW,
+            "RIGHT_ELBOW": PoseLandmark.RIGHT_ELBOW,
+            "LEFT_WRIST": PoseLandmark.LEFT_WRIST,
+            "RIGHT_WRIST": PoseLandmark.RIGHT_WRIST,
+        }
 
-    返回值说明：
-    - left_base: 左手 78 维结构特征，不存在则全 0
-    - right_base: 右手 78 维结构特征，不存在则全 0
-    - left_center/right_center: 掌心中心，不存在则 None
-    - left_scale/right_scale: 掌部尺度，不存在则 None
+    return {
+        "LEFT_SHOULDER": PoseLandmark.RIGHT_SHOULDER,
+        "RIGHT_SHOULDER": PoseLandmark.LEFT_SHOULDER,
+        "LEFT_ELBOW": PoseLandmark.RIGHT_ELBOW,
+        "RIGHT_ELBOW": PoseLandmark.LEFT_ELBOW,
+        "LEFT_WRIST": PoseLandmark.RIGHT_WRIST,
+        "RIGHT_WRIST": PoseLandmark.LEFT_WRIST,
+    }
 
-    注意：
-    这里只构造 78 维静态特征。
-    每只手额外的 2 维 motion 要等 30 帧窗口齐了以后再统一计算。
+
+# =========================
+# Pose 身体坐标系辅助函数
+# =========================
+
+
+def _landmark_visible(pose_landmarks, landmark_enum, threshold: float = POSE_VISIBILITY_THRESHOLD) -> bool:
+    """判断 Pose 某个关键点是否可用。"""
+    lm = pose_landmarks.landmark[landmark_enum.value]
+    return getattr(lm, "visibility", 1.0) >= threshold
+
+
+def _pose_xy(pose_landmarks, landmark_enum) -> np.ndarray:
+    """读取 Pose 关键点 xy 坐标。"""
+    lm = pose_landmarks.landmark[landmark_enum.value]
+    return np.array([lm.x, lm.y], dtype=np.float32)
+
+
+def _normalize_point_to_shoulder(point_xy: np.ndarray,
+                                 shoulder_center: np.ndarray,
+                                 shoulder_width: float) -> np.ndarray:
+    """把某个点转换成相对两肩中心、按肩宽归一化的身体坐标。"""
+    safe_width = max(float(shoulder_width), 1e-6)
+    return ((point_xy - shoulder_center) / safe_width).astype(np.float32)
+
+
+def _calc_elbow_angle_cos(shoulder_xy: np.ndarray,
+                          elbow_xy: np.ndarray,
+                          wrist_xy: np.ndarray) -> float:
+    """计算肩-肘-腕夹角余弦。"""
+    upper = shoulder_xy - elbow_xy
+    lower = wrist_xy - elbow_xy
+
+    upper_norm = np.linalg.norm(upper)
+    lower_norm = np.linalg.norm(lower)
+
+    if upper_norm < 1e-6 or lower_norm < 1e-6:
+        return 0.0
+
+    cos_value = float(np.dot(upper, lower) / (upper_norm * lower_norm))
+    return float(np.clip(cos_value, -1.0, 1.0))
+
+
+# =========================
+# 新版 166 维特征
+# =========================
+
+
+def extract_arm_pose_frame_parts(hand_results,
+                                 pose_results,
+                                 mp_pose,
+                                 swap_handedness: bool = SWAP_HANDEDNESS,
+                                 swap_pose_lr: bool = SWAP_POSE_LR):
+    """从单帧 MediaPipe Hands + Pose 结果中提取 166 维特征所需的中间数据。
+
+    如果 Pose 左右肩不可用，返回 None。
+    左右肩是身体坐标系的基础，没有肩膀就不采这一帧。
     """
-    if (
-        not results.multi_hand_landmarks
-        or not results.multi_hand_world_landmarks
-        or not results.multi_handedness
-    ):
+    if pose_results is None or pose_results.pose_landmarks is None:
+        return None
+
+    pose_landmarks = pose_results.pose_landmarks
+    PoseLandmark = mp_pose.PoseLandmark
+
+    pose_lr = resolve_pose_lr(PoseLandmark, swap_pose_lr)
+    LEFT_SHOULDER = pose_lr["LEFT_SHOULDER"]
+    RIGHT_SHOULDER = pose_lr["RIGHT_SHOULDER"]
+    LEFT_ELBOW = pose_lr["LEFT_ELBOW"]
+    RIGHT_ELBOW = pose_lr["RIGHT_ELBOW"]
+    LEFT_WRIST = pose_lr["LEFT_WRIST"]
+    RIGHT_WRIST = pose_lr["RIGHT_WRIST"]
+
+    # 1. 左右肩必须可用
+    required_shoulders = [
+        LEFT_SHOULDER,
+        RIGHT_SHOULDER,
+    ]
+
+    for landmark_enum in required_shoulders:
+        if not _landmark_visible(pose_landmarks, landmark_enum):
+            return None
+
+    left_shoulder = _pose_xy(pose_landmarks, LEFT_SHOULDER)
+    right_shoulder = _pose_xy(pose_landmarks, RIGHT_SHOULDER)
+
+    shoulder_center = (left_shoulder + right_shoulder) / 2.0
+    shoulder_width = float(np.linalg.norm(right_shoulder - left_shoulder))
+    if shoulder_width < 1e-6:
         return None
 
     frame_parts = {
-        "left_base": np.zeros(SINGLE_HAND_BASE_DIM, dtype=np.float32),
-        "right_base": np.zeros(SINGLE_HAND_BASE_DIM, dtype=np.float32),
-        "left_center": None,
-        "right_center": None,
-        "left_scale": None,
-        "right_scale": None,
+        "left_hand_78": np.zeros(78, dtype=np.float32),
+        "right_hand_78": np.zeros(78, dtype=np.float32),
         "left_score": -1.0,
         "right_score": -1.0,
+        "left_wrist_rel": np.zeros(2, dtype=np.float32),
+        "right_wrist_rel": np.zeros(2, dtype=np.float32),
+        "left_elbow_rel": np.zeros(2, dtype=np.float32),
+        "right_elbow_rel": np.zeros(2, dtype=np.float32),
+        "left_elbow_angle": 0.0,
+        "right_elbow_angle": 0.0,
     }
 
-    hand_count = min(
-        len(results.multi_hand_landmarks),
-        len(results.multi_hand_world_landmarks),
-        len(results.multi_handedness)
-    )
+    # 2. Hands：左右手 78 维精细局部手型
+    if (
+        hand_results is not None
+        and hand_results.multi_hand_world_landmarks
+        and hand_results.multi_handedness
+    ):
+        hand_count = min(
+            len(hand_results.multi_hand_world_landmarks),
+            len(hand_results.multi_handedness)
+        )
 
-    for index in range(hand_count):
-        hand_landmarks = results.multi_hand_landmarks[index]
-        hand_world_landmarks = results.multi_hand_world_landmarks[index]
-        handedness = results.multi_handedness[index].classification[0]
+        for index in range(hand_count):
+            hand_world_landmarks = hand_results.multi_hand_world_landmarks[index]
+            handedness = hand_results.multi_handedness[index].classification[0]
+            label = normalize_handedness(handedness.label, swap_handedness)
+            score = float(handedness.score)
+            hand_feature = build_frame_feature(hand_world_landmarks)
 
-        label = normalize_handedness(handedness.label, swap_handedness)
-        score = float(handedness.score)
-
-        base_feature = build_frame_feature(hand_world_landmarks)
-        palm_center = extract_palm_center(hand_landmarks)
-        palm_scale = extract_palm_scale(hand_landmarks)
-
-        if label == "Left":
-            if score > frame_parts["left_score"]:
-                frame_parts["left_base"] = base_feature
-                frame_parts["left_center"] = palm_center
-                frame_parts["left_scale"] = palm_scale
+            if label == "Left" and score > frame_parts["left_score"]:
+                frame_parts["left_hand_78"] = hand_feature
                 frame_parts["left_score"] = score
-
-        elif label == "Right":
-            if score > frame_parts["right_score"]:
-                frame_parts["right_base"] = base_feature
-                frame_parts["right_center"] = palm_center
-                frame_parts["right_scale"] = palm_scale
+            elif label == "Right" and score > frame_parts["right_score"]:
+                frame_parts["right_hand_78"] = hand_feature
                 frame_parts["right_score"] = score
+
+    # 3. Pose：左右 wrist / elbow 相对肩膀中心的位置，并按肩宽归一化
+    pose_pairs = [
+        ("left_wrist_rel", LEFT_WRIST),
+        ("right_wrist_rel", RIGHT_WRIST),
+        ("left_elbow_rel", LEFT_ELBOW),
+        ("right_elbow_rel", RIGHT_ELBOW),
+    ]
+
+    for key, landmark_enum in pose_pairs:
+        if _landmark_visible(pose_landmarks, landmark_enum):
+            point_xy = _pose_xy(pose_landmarks, landmark_enum)
+            frame_parts[key] = _normalize_point_to_shoulder(
+                point_xy,
+                shoulder_center,
+                shoulder_width
+            )
+
+    # 4. Pose：左肘角度
+    left_arm_points = [
+        LEFT_SHOULDER,
+        LEFT_ELBOW,
+        LEFT_WRIST,
+    ]
+    if all(_landmark_visible(pose_landmarks, item) for item in left_arm_points):
+        left_elbow = _pose_xy(pose_landmarks, LEFT_ELBOW)
+        left_wrist = _pose_xy(pose_landmarks, LEFT_WRIST)
+        frame_parts["left_elbow_angle"] = _calc_elbow_angle_cos(
+            left_shoulder,
+            left_elbow,
+            left_wrist
+        )
+
+    # 5. Pose：右肘角度
+    right_arm_points = [
+        PoseLandmark.RIGHT_SHOULDER,
+        PoseLandmark.RIGHT_ELBOW,
+        PoseLandmark.RIGHT_WRIST,
+    ]
+    if all(_landmark_visible(pose_landmarks, item) for item in right_arm_points):
+        right_elbow = _pose_xy(pose_landmarks, PoseLandmark.RIGHT_ELBOW)
+        right_wrist = _pose_xy(pose_landmarks, PoseLandmark.RIGHT_WRIST)
+        frame_parts["right_elbow_angle"] = _calc_elbow_angle_cos(
+            right_shoulder,
+            right_elbow,
+            right_wrist
+        )
 
     return frame_parts
 
 
-def _build_hand_motion(frame_parts_list, center_key: str, scale_key: str):
-    """根据 30 帧掌心中心构造某只手的 2 维运动特征。"""
-    motion = np.zeros((len(frame_parts_list), 2), dtype=np.float32)
-
-    reference_center = None
-    reference_scale = 1e-6
-
-    for frame_parts in frame_parts_list:
-        center = frame_parts[center_key]
-        scale = frame_parts[scale_key]
-
-        if center is not None:
-            reference_center = center
-            reference_scale = max(float(scale), 1e-6)
-            break
-
-    if reference_center is None:
-        return motion
-
-    for index, frame_parts in enumerate(frame_parts_list):
-        center = frame_parts[center_key]
-        if center is not None:
-            motion[index] = (center - reference_center) / reference_scale
-
-    return motion
-
-
-def _build_two_hand_relation(frame_parts_list):
-    """构造双手相对位置特征：dx, dy。
-
-    dx/dy 语义：
-    右手掌心 - 左手掌心，并按掌部尺度归一化。
-
-    如果当前帧只有一只手，则 dx/dy = 0。
-    """
-    relation = np.zeros((len(frame_parts_list), 2), dtype=np.float32)
-
-    for index, frame_parts in enumerate(frame_parts_list):
-        left_center = frame_parts["left_center"]
-        right_center = frame_parts["right_center"]
-
-        if left_center is None or right_center is None:
-            continue
-
-        left_scale = frame_parts["left_scale"]
-        right_scale = frame_parts["right_scale"]
-        scale = max(float(left_scale), float(right_scale), 1e-6)
-
-        relation[index] = (right_center - left_center) / scale
-
-    return relation
-
-
-def build_two_hand_sample(frame_parts_list):
-    """把 30 帧双手中间特征拼成最终样本，形状为 (30, 162)。
-
-    最终格式：
-    left_hand_80 + right_hand_80 + relation_2
-
-    其中：
-    left_hand_80 = left_base_78 + left_motion_2
-    right_hand_80 = right_base_78 + right_motion_2
-    relation_2 = dx + dy
-    """
+def build_arm_pose_sample(frame_parts_list):
+    """把 30 帧中间特征拼成最终模型输入，形状为 (30, 166)。"""
     if len(frame_parts_list) == 0:
         raise ValueError("frame_parts_list 不能为空。")
 
-    left_base = np.stack(
-        [frame_parts["left_base"] for frame_parts in frame_parts_list],
-        axis=0
-    ).astype(np.float32)
+    rows = []
+    for frame_parts in frame_parts_list:
+        row = np.concatenate([
+            frame_parts["left_hand_78"],
+            frame_parts["right_hand_78"],
+            frame_parts["left_wrist_rel"],
+            frame_parts["right_wrist_rel"],
+            frame_parts["left_elbow_rel"],
+            frame_parts["right_elbow_rel"],
+            np.array([
+                frame_parts["left_elbow_angle"],
+                frame_parts["right_elbow_angle"],
+            ], dtype=np.float32)
+        ]).astype(np.float32)
 
-    right_base = np.stack(
-        [frame_parts["right_base"] for frame_parts in frame_parts_list],
-        axis=0
-    ).astype(np.float32)
+        if row.shape[0] != FEATURE_DIM:
+            raise ValueError(f"单帧特征维度异常：{row.shape}")
 
-    left_motion = _build_hand_motion(frame_parts_list, "left_center", "left_scale")
-    right_motion = _build_hand_motion(frame_parts_list, "right_center", "right_scale")
-    relation = _build_two_hand_relation(frame_parts_list)
+        rows.append(row)
 
-    left_feature = np.concatenate([left_base, left_motion], axis=1)
-    right_feature = np.concatenate([right_base, right_motion], axis=1)
-
-    sample = np.concatenate(
-        [left_feature, right_feature, relation],
-        axis=1
-    ).astype(np.float32)
-
-    if sample.shape[1] != TWO_HAND_FEATURE_DIM:
-        raise ValueError(f"双手特征维度异常：{sample.shape}")
-
+    sample = np.stack(rows, axis=0).astype(np.float32)
     return sample

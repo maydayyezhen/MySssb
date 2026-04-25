@@ -1,13 +1,18 @@
-import numpy as np
 from pathlib import Path
 
-EXPECTED_SAMPLE_SHAPE = (30, 162)
+import numpy as np
+
+try:
+    from src.config.gesture_config import EXPECTED_SAMPLE_SHAPE
+except ImportError:
+    from config.gesture_config import EXPECTED_SAMPLE_SHAPE
+
 
 def load_dataset(data_root: str):
-    """读取数据目录下的所有样本，并合并成训练用的大数组。
+    """读取数据目录下的所有样本，并合并成训练用数组。
 
     目录结构示例：
-    data_processed/
+    data_processed_arm_pose_10fps/
     ├─ hello/
     │  ├─ sample_001.npy
     │  ├─ sample_002.npy
@@ -17,18 +22,15 @@ def load_dataset(data_root: str):
 
     root = Path(data_root)
 
-    # 读取所有标签目录
     class_names = sorted([d.name for d in root.iterdir() if d.is_dir()])
     if not class_names:
         raise ValueError(f"数据目录下没有找到任何标签文件夹：{data_root}")
 
-    # 建立标签映射
     label_map = {name: idx for idx, name in enumerate(class_names)}
 
     x_list = []
     y_list = []
 
-    # 逐标签读取样本
     for class_name in class_names:
         class_dir = root / class_name
         sample_files = sorted(class_dir.glob("sample_*.npy"))
@@ -38,9 +40,8 @@ def load_dataset(data_root: str):
         for sample_file in sample_files:
             sample = np.load(sample_file)
 
-            # 检查 shape 是否符合预期
             if sample.shape != EXPECTED_SAMPLE_SHAPE:
-                print(f"跳过异常样本：{sample_file}，shape = {sample.shape}")
+                print(f"跳过异常样本：{sample_file}，shape = {sample.shape}，期望 = {EXPECTED_SAMPLE_SHAPE}")
                 continue
 
             x_list.append(sample.astype(np.float32))
@@ -49,9 +50,8 @@ def load_dataset(data_root: str):
     if not x_list:
         raise ValueError("没有读取到任何有效样本。")
 
-    # 合并成训练用数组
-    X = np.stack(x_list, axis=0)   # (N, 30, 80)
-    y = np.array(y_list, dtype=np.int64)  # (N,)
+    X = np.stack(x_list, axis=0)
+    y = np.array(y_list, dtype=np.int64)
 
     print("数据读取完成。")
     print("X shape =", X.shape)
@@ -59,6 +59,7 @@ def load_dataset(data_root: str):
     print("label_map =", label_map)
 
     return X, y, label_map
+
 
 def split_dataset_stratified(X, y, train_ratio=0.8, seed=42):
     """按类别分层打乱并划分训练集、验证集。"""
@@ -78,7 +79,6 @@ def split_dataset_stratified(X, y, train_ratio=0.8, seed=42):
 
         split_index = int(len(cls_indices) * train_ratio)
 
-        # 至少保证验证集有1个样本（前提是这个类别样本数 > 1）
         if len(cls_indices) > 1:
             split_index = min(max(split_index, 1), len(cls_indices) - 1)
 
@@ -95,7 +95,6 @@ def split_dataset_stratified(X, y, train_ratio=0.8, seed=42):
     X_val = np.concatenate(val_x_list, axis=0)
     y_val = np.concatenate(val_y_list, axis=0)
 
-    # 再分别打乱训练集和验证集内部顺序
     train_perm = np.random.permutation(len(X_train))
     val_perm = np.random.permutation(len(X_val))
 
@@ -106,7 +105,9 @@ def split_dataset_stratified(X, y, train_ratio=0.8, seed=42):
 
     return X_train, y_train, X_val, y_val
 
+
 def print_label_distribution(name, y, label_map):
+    """打印标签分布。"""
     reverse_label_map = {v: k for k, v in label_map.items()}
     unique, counts = np.unique(y, return_counts=True)
 

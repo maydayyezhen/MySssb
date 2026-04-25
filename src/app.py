@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 
 from src.predict import GesturePredictSession
+from src.config.gesture_config import WINDOW_SIZE
 
 DEBUG_WS_WINDOW = True
 
@@ -64,6 +65,7 @@ def draw_ws_debug_overlay(frame, result: dict):
         cv2.LINE_AA
     )
 
+
 app = FastAPI(title="MySssb Gesture Service")
 
 
@@ -102,7 +104,7 @@ async def gesture_ws(websocket: WebSocket):
                 if msg_type == "start":
                     started = True
 
-                    # 每个连接在 start 时创建独立识别会话
+
                     if session is not None:
                         session.close()
                     session = GesturePredictSession()
@@ -113,7 +115,7 @@ async def gesture_ws(websocket: WebSocket):
                         "label": "Waiting...",
                         "confidence": 0.0,
                         "validFrames": 0,
-                        "windowSize": 30,
+                        "windowSize": WINDOW_SIZE,
                         "hasValidHand": False
                     })
                 else:
@@ -143,12 +145,11 @@ async def gesture_ws(websocket: WebSocket):
                     })
                     continue
 
-                # 和本地 camera.py 一致，做镜像
                 frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
                 frame = cv2.flip(frame, 1)
 
-                # 调用识别
                 raw_result = session.process_frame(frame, draw_landmarks=True)
+
 
                 result = {
                     "type": "result",

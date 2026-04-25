@@ -1,5 +1,6 @@
 import cv2
 
+from config.gesture_config import WINDOW_SIZE
 from predict import GesturePredictSession
 
 
@@ -71,16 +72,12 @@ def draw_overlay(frame, result: dict):
 def main():
     # ========= 可改参数 =========
     camera_index = 0
-    model_path = "../artifacts/gesture_cnn_twohand.keras"
-    label_map_path = "../artifacts/label_map_twohand.json"
-    window_size = 30
+    window_size = WINDOW_SIZE
     confidence_threshold = 0.7
     max_missing_frames = 10
     # ==========================
 
     session = GesturePredictSession(
-        model_path=model_path,
-        label_map_path=label_map_path,
         window_size=window_size,
         confidence_threshold=confidence_threshold,
         max_missing_frames=max_missing_frames,
