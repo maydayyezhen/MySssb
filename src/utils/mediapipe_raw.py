@@ -155,19 +155,24 @@ def extract_raw_mediapipe_frame(hand_results,
                 hand_world_landmarks_xyz[slot, lm_index, 2] = float(lm.z)
 
     # 2. Pose 原始结果
+    pose_landmarks_xyzc_raw = pose_landmarks_xyzc.copy()
+
     if pose_results is not None and pose_results.pose_landmarks is not None:
         pose_present = np.array(1, dtype=np.float32)
+
         for lm_index, lm in enumerate(pose_results.pose_landmarks.landmark):
             pose_landmarks_xyzc[lm_index, 0] = float(lm.x)
             pose_landmarks_xyzc[lm_index, 1] = float(lm.y)
             pose_landmarks_xyzc[lm_index, 2] = float(lm.z)
             pose_landmarks_xyzc[lm_index, 3] = float(getattr(lm, "visibility", 1.0))
-            pose_landmarks_xyzc_raw = pose_landmarks_xyzc.copy()
 
-            # 前端发送镜像自拍图时，保存前就把 Pose 规范化成项目内部真实身体坐标系。
-            # 这样 sample_xxx.npz 里的 pose_landmarks_xyzc 就是最终规范结果。
-            if float(pose_present) > 0 and MIRROR_POSE_X:
-                pose_landmarks_xyzc = normalize_mirrored_pose_xyzc(pose_landmarks_xyzc)
+        # 注意：必须等 33 个点全部填完后，再复制 raw。
+        pose_landmarks_xyzc_raw = pose_landmarks_xyzc.copy()
+
+        # 前端发送镜像自拍图时，保存前把 Pose 规范化成项目内部真实身体坐标系。
+        # 只允许执行一次，不能放在 for 循环里。
+        if MIRROR_POSE_X:
+            pose_landmarks_xyzc = normalize_mirrored_pose_xyzc(pose_landmarks_xyzc)
 
     # 3. 有效帧判定
     if RAW_REQUIRE_HAND and float(np.sum(hand_present)) <= 0:
