@@ -9,7 +9,6 @@ from src.config.gesture_config import (
     DATA_DIR_NAME,
     EXPECTED_SAMPLE_SHAPE,
     POSE_VISIBILITY_THRESHOLD,
-    SWAP_POSE_LR,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent

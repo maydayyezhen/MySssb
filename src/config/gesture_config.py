@@ -9,11 +9,9 @@ DATA_DIR_NAME = "data_processed_arm_pose_10fps"
 MODEL_FILE_NAME = "gesture_cnn_arm_pose_10fps.keras"
 LABEL_MAP_FILE_NAME = "label_map_arm_pose_10fps.json"
 
-# Hands 左右是否交换。
-# 当前手机 /ws/dataset 采集样本显示 Hands 槽位反了，因此先设为 False。
-# 验收标准：slot 0 = 真实左手，slot 1 = 真实右手。
-# 不再人为交换 MediaPipe Hands 左右。
-# MediaPipe 返回 Left 就进入 slot 0，返回 Right 就进入 slot 1。
+# Hands 不交换。
+# 前端发送镜像自拍图，MediaPipe Hands 的 handedness 按原始输出使用。
+# slot 0 = MediaPipe Hands Left，slot 1 = MediaPipe Hands Right。
 SWAP_HANDEDNESS = False
 
 # Pose 左右点位交换。
