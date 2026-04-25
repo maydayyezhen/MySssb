@@ -543,6 +543,20 @@ async def dataset_ws(websocket: WebSocket):
                     "message": "图像解码失败"
                 })
                 continue
+            debug_dir = PROJECT_ROOT / "debug_input_frames"
+            debug_dir.mkdir(parents=True, exist_ok=True)
+
+            cv2.imwrite(str(debug_dir / "00_received_raw.jpg"), frame)
+
+            debug_frame = frame.copy()
+
+            if ROTATE_PHONE_FRAME:
+                debug_frame = cv2.rotate(debug_frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            cv2.imwrite(str(debug_dir / "01_after_rotate.jpg"), debug_frame)
+
+            if FLIP_PHONE_FRAME:
+                debug_frame = cv2.flip(debug_frame, 1)
+            cv2.imwrite(str(debug_dir / "02_after_rotate_flip.jpg"), debug_frame)
 
             if ROTATE_PHONE_FRAME:
                 frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
