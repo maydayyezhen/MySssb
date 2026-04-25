@@ -16,7 +16,7 @@ SWAP_HANDEDNESS = True
 
 # Pose 左右是否交换。
 # 注意：Pose 要单独通过后端调试窗口确认，不要因为 Hands 反了就自动跟着改。
-SWAP_POSE_LR = True
+SWAP_POSE_LR = False
 
 POSE_VISIBILITY_THRESHOLD = 0.5
 
