@@ -66,10 +66,13 @@ def save_raw_sample(root_dir: Path, label: str, frames: List[Dict]) -> Path:
         axis=0
     ).astype(np.float32)
 
+    # 使用 float64 保留帧间 100ms 左右的真实采样间隔。
     timestamps_ms = np.stack(
         [frame["timestamp_ms"] for frame in frames],
         axis=0
-    ).astype(np.float32)
+    ).astype(np.float64)
+
+    timestamps_relative_ms = timestamps_ms - timestamps_ms[0]
 
     frame_width_height = frames[0]["frame_width_height"].astype(np.int32)
 
@@ -82,6 +85,7 @@ def save_raw_sample(root_dir: Path, label: str, frames: List[Dict]) -> Path:
         pose_landmarks_xyzc=pose_landmarks_xyzc,
         pose_present=pose_present,
         timestamps_ms=timestamps_ms,
+        timestamps_relative_ms=timestamps_relative_ms,
         frame_width_height=frame_width_height,
         label=np.array(label),
     )

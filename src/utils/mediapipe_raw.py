@@ -173,6 +173,8 @@ def extract_raw_mediapipe_frame(hand_results,
         "hand_present": hand_present,
         "pose_landmarks_xyzc": pose_landmarks_xyzc,
         "pose_present": pose_present,
-        "timestamp_ms": np.array(timestamp_ms, dtype=np.float32),
+        # 使用 float64 保存绝对毫秒时间戳。
+        # float32 在 1e12 级别的毫秒时间戳上无法保留 100ms 级别差异。
+        "timestamp_ms": np.array(timestamp_ms, dtype=np.float64),
         "frame_width_height": np.array([frame_width, frame_height], dtype=np.int32),
     }
