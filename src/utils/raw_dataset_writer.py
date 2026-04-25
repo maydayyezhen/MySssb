@@ -61,6 +61,19 @@ def save_raw_sample(root_dir: Path, label: str, frames: List[Dict]) -> Path:
         axis=0
     ).astype(np.float32)
 
+    pose_landmarks_xyzc_raw = np.stack(
+        [
+            frame.get("pose_landmarks_xyzc_raw", frame["pose_landmarks_xyzc"])
+            for frame in frames
+        ],
+        axis=0
+    ).astype(np.float32)
+
+    pose_normalized = np.array(
+        int(frames[0].get("pose_normalized", 0)),
+        dtype=np.int32
+    )
+
     pose_present = np.stack(
         [frame["pose_present"] for frame in frames],
         axis=0
@@ -83,6 +96,8 @@ def save_raw_sample(root_dir: Path, label: str, frames: List[Dict]) -> Path:
         hand_scores=hand_scores,
         hand_present=hand_present,
         pose_landmarks_xyzc=pose_landmarks_xyzc,
+        pose_landmarks_xyzc_raw=pose_landmarks_xyzc_raw,
+        pose_normalized=pose_normalized,
         pose_present=pose_present,
         timestamps_ms=timestamps_ms,
         timestamps_relative_ms=timestamps_relative_ms,

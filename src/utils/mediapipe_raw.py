@@ -13,18 +13,22 @@ try:
     from src.config.gesture_config import (
         SWAP_HANDEDNESS,
         SWAP_POSE_LR,
+        MIRROR_POSE_X,
         POSE_VISIBILITY_THRESHOLD,
         RAW_REQUIRE_SHOULDERS,
         RAW_REQUIRE_HAND,
     )
+    from src.utils.pose_normalizer import normalize_mirrored_pose_xyzc
 except ImportError:
     from config.gesture_config import (
         SWAP_HANDEDNESS,
         SWAP_POSE_LR,
+        MIRROR_POSE_X,
         POSE_VISIBILITY_THRESHOLD,
         RAW_REQUIRE_SHOULDERS,
         RAW_REQUIRE_HAND,
     )
+    from utils.pose_normalizer import normalize_mirrored_pose_xyzc
 
 
 def normalize_handedness(label: str, swap_handedness: bool = SWAP_HANDEDNESS) -> str:
@@ -158,6 +162,12 @@ def extract_raw_mediapipe_frame(hand_results,
             pose_landmarks_xyzc[lm_index, 1] = float(lm.y)
             pose_landmarks_xyzc[lm_index, 2] = float(lm.z)
             pose_landmarks_xyzc[lm_index, 3] = float(getattr(lm, "visibility", 1.0))
+            pose_landmarks_xyzc_raw = pose_landmarks_xyzc.copy()
+
+            # 前端发送镜像自拍图时，保存前就把 Pose 规范化成项目内部真实身体坐标系。
+            # 这样 sample_xxx.npz 里的 pose_landmarks_xyzc 就是最终规范结果。
+            if float(pose_present) > 0 and MIRROR_POSE_X:
+                pose_landmarks_xyzc = normalize_mirrored_pose_xyzc(pose_landmarks_xyzc)
 
     # 3. 有效帧判定
     if RAW_REQUIRE_HAND and float(np.sum(hand_present)) <= 0:
@@ -171,10 +181,15 @@ def extract_raw_mediapipe_frame(hand_results,
         "hand_world_landmarks_xyz": hand_world_landmarks_xyz,
         "hand_scores": hand_scores,
         "hand_present": hand_present,
+
+        # 注意：这里保存的是已经规范化后的 Pose。
         "pose_landmarks_xyzc": pose_landmarks_xyzc,
+
+        # 可选保留原始 Pose，方便以后排查。
+        "pose_landmarks_xyzc_raw": pose_landmarks_xyzc_raw,
+
         "pose_present": pose_present,
-        # 使用 float64 保存绝对毫秒时间戳。
-        # float32 在 1e12 级别的毫秒时间戳上无法保留 100ms 级别差异。
         "timestamp_ms": np.array(timestamp_ms, dtype=np.float64),
         "frame_width_height": np.array([frame_width, frame_height], dtype=np.int32),
+        "pose_normalized": np.array(1 if MIRROR_POSE_X else 0, dtype=np.int32),
     }

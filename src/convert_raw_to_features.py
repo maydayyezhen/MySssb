@@ -3,8 +3,6 @@
 from pathlib import Path
 
 import numpy as np
-from src.config.gesture_config import MIRROR_POSE_X
-from src.utils.pose_normalizer import normalize_mirrored_pose_xyzc
 
 from src.config.gesture_config import (
     RAW_PHONE_DATA_DIR_NAME,
@@ -155,11 +153,9 @@ def build_feature_sample_from_raw_npz(raw_path: Path) -> np.ndarray:
             else np.zeros(78, dtype=np.float32)
         )
 
+        # pose_landmarks_xyzc 在采集保存阶段已经完成规范化。
+        # 这里不要再次 normalize_mirrored_pose_xyzc，否则会二次翻转。
         pose_frame = pose[frame_index]
-
-        # 前端发送镜像自拍图时，Pose 需要规范化回非镜像身体坐标系。
-        if MIRROR_POSE_X:
-            pose_frame = normalize_mirrored_pose_xyzc(pose_frame)
 
         left_wrist_rel = np.zeros(2, dtype=np.float32)
         right_wrist_rel = np.zeros(2, dtype=np.float32)
