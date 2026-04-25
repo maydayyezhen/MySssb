@@ -26,7 +26,7 @@ DEBUG_WS_WINDOW = True
 DEBUG_DATASET_WINDOW = True
 
 ROTATE_PHONE_FRAME = True
-FLIP_PHONE_FRAME = False
+FLIP_PHONE_FRAME = True
 
 def draw_ws_debug_overlay(frame, result: dict):
     """在前端传来的图像上绘制识别调试信息。"""
