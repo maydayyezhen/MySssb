@@ -36,3 +36,4 @@ debug_frames/
 /artifacts/
 /data_processed/
 /debug_input_frames/
+/data_processed_arm_pose_10fps/
