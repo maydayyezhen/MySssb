@@ -25,6 +25,9 @@ DEBUG_WS_WINDOW = True
 # 调试采集质量时打开；正式批量采集稳定后可以改成 False。
 DEBUG_DATASET_WINDOW = True
 
+ROTATE_PHONE_FRAME = True
+FLIP_PHONE_FRAME = False
+
 def draw_ws_debug_overlay(frame, result: dict):
     """在前端传来的图像上绘制识别调试信息。"""
     cv2.putText(
@@ -323,8 +326,11 @@ async def gesture_ws(websocket: WebSocket):
                     })
                     continue
 
-                frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-                frame = cv2.flip(frame, 1)
+                if ROTATE_PHONE_FRAME:
+                    frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+                if FLIP_PHONE_FRAME:
+                    frame = cv2.flip(frame, 1)
 
                 raw_result = session.process_frame(frame, draw_landmarks=True)
 
