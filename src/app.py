@@ -372,6 +372,9 @@ async def dataset_ws(websocket: WebSocket):
     label = ""
     started = False
     raw_frames = []
+    pending_raw_frames = []
+    pending_label = ""
+    waiting_save_confirm = False
     last_sample_time = 0.0
 
     mp_hands = mp.solutions.hands
@@ -422,6 +425,9 @@ async def dataset_ws(websocket: WebSocket):
                         continue
 
                     raw_frames = []
+                    pending_raw_frames = []
+                    pending_label = ""
+                    waiting_save_confirm = False
                     last_sample_time = 0.0
                     started = True
 
@@ -436,6 +442,9 @@ async def dataset_ws(websocket: WebSocket):
 
                 if msg_type == "cancel_dataset":
                     raw_frames = []
+                    pending_raw_frames = []
+                    pending_label = ""
+                    waiting_save_confirm = False
                     started = False
                     await websocket.send_json({
                         "type": "dataset_status",
@@ -443,6 +452,53 @@ async def dataset_ws(websocket: WebSocket):
                         "label": label,
                         "validFrames": 0,
                         "windowSize": RAW_SAMPLE_FRAME_COUNT
+                    })
+                    continue
+
+                if msg_type == "save_dataset":
+                    if not waiting_save_confirm or len(
+                            pending_raw_frames) != RAW_SAMPLE_FRAME_COUNT or pending_label == "":
+                        await websocket.send_json({
+                            "type": "dataset_error",
+                            "message": "当前没有等待保存的样本"
+                        })
+                        continue
+
+                    save_path = save_raw_sample(RAW_DATA_ROOT, pending_label, pending_raw_frames)
+
+                    raw_frames = []
+                    pending_raw_frames = []
+                    label = pending_label
+                    pending_label = ""
+                    waiting_save_confirm = False
+                    started = False
+
+                    await websocket.send_json({
+                        "type": "dataset_status",
+                        "status": "saved",
+                        "label": label,
+                        "validFrames": RAW_SAMPLE_FRAME_COUNT,
+                        "windowSize": RAW_SAMPLE_FRAME_COUNT,
+                        "path": str(save_path),
+                        "message": "样本已保存"
+                    })
+                    continue
+
+                if msg_type == "discard_dataset":
+                    raw_frames = []
+                    pending_raw_frames = []
+                    discarded_label = pending_label if pending_label != "" else label
+                    pending_label = ""
+                    waiting_save_confirm = False
+                    started = False
+
+                    await websocket.send_json({
+                        "type": "dataset_status",
+                        "status": "discarded",
+                        "label": discarded_label,
+                        "validFrames": 0,
+                        "windowSize": RAW_SAMPLE_FRAME_COUNT,
+                        "message": "样本已丢弃"
                     })
                     continue
 
@@ -461,6 +517,11 @@ async def dataset_ws(websocket: WebSocket):
                     "type": "dataset_error",
                     "message": "请先发送 start_dataset 消息"
                 })
+                continue
+
+            if waiting_save_confirm:
+                # 已经采满一组样本，正在等前端确认保存/丢弃。
+                # 此时忽略继续传来的帧，避免污染 pending 样本。
                 continue
 
             now = time.monotonic()
@@ -535,17 +596,19 @@ async def dataset_ws(websocket: WebSocket):
                 })
                 continue
 
-            save_path = save_raw_sample(RAW_DATA_ROOT, label, raw_frames)
+            pending_raw_frames = list(raw_frames)
+            pending_label = label
             raw_frames = []
+            waiting_save_confirm = True
             started = False
 
             await websocket.send_json({
                 "type": "dataset_status",
-                "status": "saved",
-                "label": label,
+                "status": "ready_to_save",
+                "label": pending_label,
                 "validFrames": RAW_SAMPLE_FRAME_COUNT,
                 "windowSize": RAW_SAMPLE_FRAME_COUNT,
-                "path": str(save_path)
+                "message": "样本采集完成，请确认是否保存"
             })
 
     except WebSocketDisconnect:
