@@ -291,13 +291,13 @@ def extract_arm_pose_frame_parts(hand_results,
 
     # 5. Pose：右肘角度
     right_arm_points = [
-        PoseLandmark.RIGHT_SHOULDER,
-        PoseLandmark.RIGHT_ELBOW,
-        PoseLandmark.RIGHT_WRIST,
+        RIGHT_SHOULDER,
+        RIGHT_ELBOW,
+        RIGHT_WRIST,
     ]
     if all(_landmark_visible(pose_landmarks, item) for item in right_arm_points):
-        right_elbow = _pose_xy(pose_landmarks, PoseLandmark.RIGHT_ELBOW)
-        right_wrist = _pose_xy(pose_landmarks, PoseLandmark.RIGHT_WRIST)
+        right_elbow = _pose_xy(pose_landmarks, RIGHT_ELBOW)
+        right_wrist = _pose_xy(pose_landmarks, RIGHT_WRIST)
         frame_parts["right_elbow_angle"] = _calc_elbow_angle_cos(
             right_shoulder,
             right_elbow,

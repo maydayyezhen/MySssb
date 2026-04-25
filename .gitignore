@@ -18,3 +18,20 @@ build/
 # IDE
 .idea/
 .vscode/
+
+# datasets
+dataset_raw_phone_10fps/
+data_processed/
+
+# model artifacts
+artifacts/*.keras
+artifacts/*.h5
+artifacts/*.tflite
+artifacts/*.onnx
+
+# debug outputs
+debug_frames/
+*.npy
+*.npz
+/artifacts/
+/data_processed/
