@@ -12,11 +12,13 @@ LABEL_MAP_FILE_NAME = "label_map_arm_pose_10fps.json"
 # Hands 左右是否交换。
 # 当前手机 /ws/dataset 采集样本显示 Hands 槽位反了，因此先设为 False。
 # 验收标准：slot 0 = 真实左手，slot 1 = 真实右手。
-SWAP_HANDEDNESS = True
+# 不再人为交换 MediaPipe Hands 左右。
+# MediaPipe 返回 Left 就进入 slot 0，返回 Right 就进入 slot 1。
+SWAP_HANDEDNESS = False
 
-# Pose 左右是否交换。
-# 注意：Pose 要单独通过后端调试窗口确认，不要因为 Hands 反了就自动跟着改。
-SWAP_POSE_LR = True
+# 不再人为交换 MediaPipe Pose 左右。
+# Pose LEFT_* 就按 LEFT_* 使用，RIGHT_* 就按 RIGHT_* 使用。
+SWAP_POSE_LR = False
 
 POSE_VISIBILITY_THRESHOLD = 0.5
 

@@ -25,8 +25,23 @@ DEBUG_WS_WINDOW = True
 # 调试采集质量时打开；正式批量采集稳定后可以改成 False。
 DEBUG_DATASET_WINDOW = True
 
-ROTATE_PHONE_FRAME = True
-FLIP_PHONE_FRAME = True
+def decode_frontend_frame(bytes_data: bytes):
+    """解码前端传来的 MediaPipe-ready JPEG。
+
+    注意：
+    - 不旋转
+    - 不翻转
+    - 不裁剪
+    - 不缩放
+
+    前端必须保证发来的图像已经是可直接识别的方向。
+    """
+    arr = np.frombuffer(bytes_data, dtype=np.uint8)
+    frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    return frame
+
+# 后端不再处理图像方向。
+# 前端必须传入已经可直接送入 MediaPipe 的帧。
 
 def draw_ws_debug_overlay(frame, result: dict):
     """在前端传来的图像上绘制识别调试信息。"""
@@ -84,6 +99,58 @@ def draw_ws_debug_overlay(frame, result: dict):
         2,
         cv2.LINE_AA
     )
+
+def draw_hand_labels_for_debug(frame, hand_results, mp_hands):
+    """在调试窗口中绘制每只手的左右标签。
+
+    显示内容：
+    - Raw: MediaPipe 原始 handedness
+    - Used: 经过 SWAP_HANDEDNESS 修正后，项目实际使用的左右槽位
+    """
+    if hand_results is None:
+        return
+
+    if not hand_results.multi_hand_landmarks or not hand_results.multi_handedness:
+        return
+
+    frame_h, frame_w = frame.shape[:2]
+    hand_count = min(
+        len(hand_results.multi_hand_landmarks),
+        len(hand_results.multi_handedness),
+    )
+
+    for index in range(hand_count):
+        hand_landmarks = hand_results.multi_hand_landmarks[index]
+        handedness = hand_results.multi_handedness[index].classification[0]
+
+        raw_label = handedness.label
+        used_label = raw_label
+
+        if SWAP_HANDEDNESS:
+            if raw_label == "Left":
+                used_label = "Right"
+            elif raw_label == "Right":
+                used_label = "Left"
+
+        # 取 wrist 点作为文字位置
+        wrist = hand_landmarks.landmark[mp_hands.HandLandmark.WRIST]
+        x = int(wrist.x * frame_w)
+        y = int(wrist.y * frame_h)
+
+        text = f"Hand Raw:{raw_label} Used:{used_label}"
+
+        cv2.putText(
+            frame,
+            text,
+            (x + 10, y - 12),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 255, 255),
+            2,
+            cv2.LINE_AA
+        )
+
+        cv2.circle(frame, (x, y), 8, (0, 255, 255), -1)
 
 def draw_pose_subset_for_debug(frame, pose_results, mp_pose):
     """绘制当前模型实际使用的 Pose 点位与连线：左右肩、左右肘、左右腕。"""
@@ -205,6 +272,7 @@ def show_dataset_debug_window(frame,
                 connection_drawing_spec=mp_drawing_styles.get_default_hand_connections_style(),
             )
 
+    draw_hand_labels_for_debug(debug_frame, hand_results, mp_hands)
     draw_pose_subset_for_debug(debug_frame, pose_results, mp_pose)
 
     cv2.putText(
@@ -316,8 +384,7 @@ async def gesture_ws(websocket: WebSocket):
                     })
                     continue
 
-                arr = np.frombuffer(bytes_data, dtype=np.uint8)
-                frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                frame = decode_frontend_frame(bytes_data)
 
                 if frame is None:
                     await websocket.send_json({
@@ -325,12 +392,6 @@ async def gesture_ws(websocket: WebSocket):
                         "message": "图像解码失败"
                     })
                     continue
-
-                if ROTATE_PHONE_FRAME:
-                    frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-
-                if FLIP_PHONE_FRAME:
-                    frame = cv2.flip(frame, 1)
 
                 raw_result = session.process_frame(frame, draw_landmarks=True)
 
@@ -535,34 +596,17 @@ async def dataset_ws(websocket: WebSocket):
                 # 前端可能发得略快，这里按服务端 10FPS 再限一次速
                 continue
 
-            arr = np.frombuffer(bytes_data, dtype=np.uint8)
-            frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            frame = decode_frontend_frame(bytes_data)
             if frame is None:
                 await websocket.send_json({
                     "type": "dataset_error",
                     "message": "图像解码失败"
                 })
                 continue
+            # 调试用：保存前端传来的最终 MediaPipe-ready 帧。
             debug_dir = PROJECT_ROOT / "debug_input_frames"
             debug_dir.mkdir(parents=True, exist_ok=True)
-
-            cv2.imwrite(str(debug_dir / "00_received_raw.jpg"), frame)
-
-            debug_frame = frame.copy()
-
-            if ROTATE_PHONE_FRAME:
-                debug_frame = cv2.rotate(debug_frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-            cv2.imwrite(str(debug_dir / "01_after_rotate.jpg"), debug_frame)
-
-            if FLIP_PHONE_FRAME:
-                debug_frame = cv2.flip(debug_frame, 1)
-            cv2.imwrite(str(debug_dir / "02_after_rotate_flip.jpg"), debug_frame)
-
-            if ROTATE_PHONE_FRAME:
-                frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-
-            if FLIP_PHONE_FRAME:
-                frame = cv2.flip(frame, 1)
+            cv2.imwrite(str(debug_dir / "frontend_ready_frame.jpg"), frame)
 
             frame_height, frame_width = frame.shape[:2]
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
