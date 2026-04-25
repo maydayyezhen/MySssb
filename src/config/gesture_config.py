@@ -16,9 +16,13 @@ LABEL_MAP_FILE_NAME = "label_map_arm_pose_10fps.json"
 # MediaPipe 返回 Left 就进入 slot 0，返回 Right 就进入 slot 1。
 SWAP_HANDEDNESS = False
 
-# 不再人为交换 MediaPipe Pose 左右。
-# Pose LEFT_* 就按 LEFT_* 使用，RIGHT_* 就按 RIGHT_* 使用。
-SWAP_POSE_LR = False
+# Pose 左右点位交换。
+# 注意：这只是 Pose 镜像规范化的一半，另一半是 x = 1 - x。
+SWAP_POSE_LR = True
+
+# Pose 坐标是否做水平镜像规范化。
+# 前端发送镜像图时，Pose 需要翻回非镜像身体坐标系。
+MIRROR_POSE_X = True
 
 POSE_VISIBILITY_THRESHOLD = 0.5
 

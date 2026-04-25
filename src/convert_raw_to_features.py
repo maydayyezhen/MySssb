@@ -3,6 +3,8 @@
 from pathlib import Path
 
 import numpy as np
+from src.config.gesture_config import MIRROR_POSE_X
+from src.utils.pose_normalizer import normalize_mirrored_pose_xyzc
 
 from src.config.gesture_config import (
     RAW_PHONE_DATA_DIR_NAME,
@@ -55,24 +57,14 @@ ANGLE_CHILD_INDICES = [
 
 
 def get_pose_indices():
-    """根据 SWAP_POSE_LR 返回语义左/右对应的 Pose 索引。"""
-    if not SWAP_POSE_LR:
-        return {
-            "left_shoulder": LEFT_SHOULDER_INDEX,
-            "right_shoulder": RIGHT_SHOULDER_INDEX,
-            "left_elbow": LEFT_ELBOW_INDEX,
-            "right_elbow": RIGHT_ELBOW_INDEX,
-            "left_wrist": LEFT_WRIST_INDEX,
-            "right_wrist": RIGHT_WRIST_INDEX,
-        }
-
+    """返回规范化后的 Pose 语义点位索引。"""
     return {
-        "left_shoulder": RIGHT_SHOULDER_INDEX,
-        "right_shoulder": LEFT_SHOULDER_INDEX,
-        "left_elbow": RIGHT_ELBOW_INDEX,
-        "right_elbow": LEFT_ELBOW_INDEX,
-        "left_wrist": RIGHT_WRIST_INDEX,
-        "right_wrist": LEFT_WRIST_INDEX,
+        "left_shoulder": LEFT_SHOULDER_INDEX,
+        "right_shoulder": RIGHT_SHOULDER_INDEX,
+        "left_elbow": LEFT_ELBOW_INDEX,
+        "right_elbow": RIGHT_ELBOW_INDEX,
+        "left_wrist": LEFT_WRIST_INDEX,
+        "right_wrist": RIGHT_WRIST_INDEX,
     }
 
 
@@ -164,6 +156,10 @@ def build_feature_sample_from_raw_npz(raw_path: Path) -> np.ndarray:
         )
 
         pose_frame = pose[frame_index]
+
+        # 前端发送镜像自拍图时，Pose 需要规范化回非镜像身体坐标系。
+        if MIRROR_POSE_X:
+            pose_frame = normalize_mirrored_pose_xyzc(pose_frame)
 
         left_wrist_rel = np.zeros(2, dtype=np.float32)
         right_wrist_rel = np.zeros(2, dtype=np.float32)

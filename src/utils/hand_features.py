@@ -6,6 +6,7 @@ try:
         POSE_VISIBILITY_THRESHOLD,
         SWAP_HANDEDNESS,
         SWAP_POSE_LR,
+        MIRROR_POSE_X,
     )
 except ImportError:
     from config.gesture_config import (
@@ -13,6 +14,7 @@ except ImportError:
         POSE_VISIBILITY_THRESHOLD,
         SWAP_HANDEDNESS,
         SWAP_POSE_LR,
+        MIRROR_POSE_X
     )
 
 
@@ -20,6 +22,17 @@ except ImportError:
 # 单手局部 3D 手型特征
 # =========================
 
+
+def _pose_xy_for_feature(pose_landmarks, landmark_enum):
+    """读取用于特征构造的 Pose xy 坐标。"""
+    lm = pose_landmarks.landmark[landmark_enum.value]
+    x = float(lm.x)
+    y = float(lm.y)
+
+    if MIRROR_POSE_X:
+        x = 1.0 - x
+
+    return np.array([x, y], dtype=np.float32)
 
 def build_frame_feature(hand_world_landmarks):
     """使用 Hands world landmarks 构造单只手 78 维局部手型特征。
@@ -211,8 +224,8 @@ def extract_arm_pose_frame_parts(hand_results,
         if not _landmark_visible(pose_landmarks, landmark_enum):
             return None
 
-    left_shoulder = _pose_xy(pose_landmarks, LEFT_SHOULDER)
-    right_shoulder = _pose_xy(pose_landmarks, RIGHT_SHOULDER)
+    left_shoulder = _pose_xy_for_feature(pose_landmarks,LEFT_SHOULDER)
+    right_shoulder = _pose_xy_for_feature(pose_landmarks,RIGHT_SHOULDER)
 
     shoulder_center = (left_shoulder + right_shoulder) / 2.0
     shoulder_width = float(np.linalg.norm(right_shoulder - left_shoulder))
@@ -267,7 +280,7 @@ def extract_arm_pose_frame_parts(hand_results,
 
     for key, landmark_enum in pose_pairs:
         if _landmark_visible(pose_landmarks, landmark_enum):
-            point_xy = _pose_xy(pose_landmarks, landmark_enum)
+            point_xy = _pose_xy_for_feature(pose_landmarks, landmark_enum)
             frame_parts[key] = _normalize_point_to_shoulder(
                 point_xy,
                 shoulder_center,
@@ -281,8 +294,8 @@ def extract_arm_pose_frame_parts(hand_results,
         LEFT_WRIST,
     ]
     if all(_landmark_visible(pose_landmarks, item) for item in left_arm_points):
-        left_elbow = _pose_xy(pose_landmarks, LEFT_ELBOW)
-        left_wrist = _pose_xy(pose_landmarks, LEFT_WRIST)
+        left_elbow = _pose_xy_for_feature(pose_landmarks, LEFT_ELBOW)
+        left_wrist = _pose_xy_for_feature(pose_landmarks, LEFT_WRIST)
         frame_parts["left_elbow_angle"] = _calc_elbow_angle_cos(
             left_shoulder,
             left_elbow,
@@ -296,8 +309,8 @@ def extract_arm_pose_frame_parts(hand_results,
         RIGHT_WRIST,
     ]
     if all(_landmark_visible(pose_landmarks, item) for item in right_arm_points):
-        right_elbow = _pose_xy(pose_landmarks, RIGHT_ELBOW)
-        right_wrist = _pose_xy(pose_landmarks, RIGHT_WRIST)
+        right_elbow = _pose_xy_for_feature(pose_landmarks, RIGHT_ELBOW)
+        right_wrist = _pose_xy_for_feature(pose_landmarks, RIGHT_WRIST)
         frame_parts["right_elbow_angle"] = _calc_elbow_angle_cos(
             right_shoulder,
             right_elbow,
