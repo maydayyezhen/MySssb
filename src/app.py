@@ -5,6 +5,7 @@ import time
 import cv2
 import mediapipe as mp
 import numpy as np
+from src.utils.raw_feature_converter import convert_raw_dataset_to_features
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from src.utils.raw_dataset_scanner import scan_raw_dataset
 
@@ -340,6 +341,17 @@ async def list_raw_samples():
         "items": samples,
     }
 
+@app.post("/dataset/raw/convert-to-features")
+async def convert_raw_to_features():
+    """将 raw dataset 转换为训练 feature 数据集。
+
+    输入目录：
+    dataset_raw_phone_10fps
+
+    输出目录：
+    data_processed_arm_pose_10fps
+    """
+    return convert_raw_dataset_to_features(PROJECT_ROOT)
 
 @app.websocket("/ws/gesture")
 async def gesture_ws(websocket: WebSocket):
