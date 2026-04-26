@@ -446,6 +446,13 @@ async def gesture_ws(websocket: WebSocket):
                         session.close()
                     session = GesturePredictSession()
 
+                    print(
+                        "[ws/gesture] session model:",
+                        session.model_version_name,
+                        session.using_published_model,
+                        session.model_path
+                    )
+
                     await websocket.send_json({
                         "type": "result",
                         "status": "warming_up",
