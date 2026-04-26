@@ -6,6 +6,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 from pydantic import BaseModel
+from src.utils.runtime_model_bootstrap import bootstrap_runtime_model_from_backend
 
 from src.utils.runtime_model_registry import (
     reload_runtime_model,
@@ -329,6 +330,16 @@ RAW_DATA_ROOT = PROJECT_ROOT / RAW_PHONE_DATA_DIR_NAME
 
 app = FastAPI(title="MySssb Gesture Service")
 
+
+@app.on_event("startup")
+async def startup_load_published_model():
+    """服务启动时尝试从 Spring Boot 加载当前发布模型。
+
+    注意：
+    该步骤失败不会阻塞 Python 服务启动。
+    """
+    result = bootstrap_runtime_model_from_backend()
+    print(f"[startup] runtime model bootstrap result: {result}")
 
 @app.get("/health")
 async def health():
