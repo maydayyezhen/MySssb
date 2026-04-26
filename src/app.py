@@ -6,6 +6,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from src.utils.raw_dataset_scanner import scan_raw_dataset
 
 from src.predict import GesturePredictSession
 from src.config.gesture_config import (
@@ -24,6 +25,9 @@ DEBUG_WS_WINDOW = True
 # 手机端 raw dataset 采集调试窗口开关。
 # 调试采集质量时打开；正式批量采集稳定后可以改成 False。
 DEBUG_DATASET_WINDOW = True
+# 是否保存前端传来的最终输入帧。
+# 调试图像方向时可以打开；正式采集时必须关闭，否则每帧写磁盘会拖慢采集。
+SAVE_DEBUG_INPUT_FRAME = False
 
 def decode_frontend_frame(bytes_data: bytes):
     """解码前端传来的 MediaPipe-ready JPEG。
@@ -322,6 +326,20 @@ app = FastAPI(title="MySssb Gesture Service")
 async def health():
     return {"ok": True}
 
+@app.get("/dataset/raw/samples")
+async def list_raw_samples():
+    """扫描 raw dataset 样本列表。
+
+    返回 Spring Boot 可同步入库的样本摘要。
+    """
+    samples = scan_raw_dataset(RAW_DATA_ROOT)
+
+    return {
+        "rootDir": str(RAW_DATA_ROOT),
+        "total": len(samples),
+        "items": samples,
+    }
+
 
 @app.websocket("/ws/gesture")
 async def gesture_ws(websocket: WebSocket):
@@ -604,9 +622,11 @@ async def dataset_ws(websocket: WebSocket):
                 })
                 continue
             # 调试用：保存前端传来的最终 MediaPipe-ready 帧。
-            debug_dir = PROJECT_ROOT / "debug_input_frames"
-            debug_dir.mkdir(parents=True, exist_ok=True)
-            cv2.imwrite(str(debug_dir / "frontend_ready_frame.jpg"), frame)
+            # 正式采集时不要每帧写磁盘，否则会明显拖慢采集链路。
+            if SAVE_DEBUG_INPUT_FRAME:
+                debug_dir = PROJECT_ROOT / "debug_input_frames"
+                debug_dir.mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(str(debug_dir / "frontend_ready_frame.jpg"), frame)
 
             frame_height, frame_width = frame.shape[:2]
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
