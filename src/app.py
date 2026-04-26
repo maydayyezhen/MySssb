@@ -5,6 +5,12 @@ import time
 import cv2
 import mediapipe as mp
 import numpy as np
+from pydantic import BaseModel
+
+from src.utils.runtime_model_registry import (
+    reload_runtime_model,
+    get_runtime_model_info,
+)
 from src.utils.raw_feature_converter import convert_raw_dataset_to_features
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from src.utils.raw_dataset_scanner import scan_raw_dataset
@@ -20,6 +26,7 @@ from src.config.gesture_config import (
 )
 from src.utils.mediapipe_raw import extract_raw_mediapipe_frame
 from src.utils.raw_dataset_writer import save_raw_sample
+from src.utils.training_runner import run_training
 
 DEBUG_WS_WINDOW = True
 
@@ -352,6 +359,47 @@ async def convert_raw_to_features():
     data_processed_arm_pose_10fps
     """
     return convert_raw_dataset_to_features(PROJECT_ROOT)
+
+@app.post("/model/train")
+async def train_model():
+    """执行一次模型训练。
+
+    数据输入：
+    data_processed_arm_pose_10fps
+
+    输出：
+    artifacts/train_yyyyMMdd_HHmmss/
+    """
+    return run_training(PROJECT_ROOT)
+
+class ModelReloadRequest(BaseModel):
+    """模型重载请求。"""
+
+    modelPath: str
+    labelMapPath: str
+    versionName: str = ""
+
+
+@app.post("/model/reload")
+async def reload_model(request: ModelReloadRequest):
+    """重载实时识别服务使用的模型。
+
+    说明：
+    1. 只影响新创建的 GesturePredictSession；
+    2. 已经建立的 WebSocket 会话不会强制切换；
+    3. 接口会校验模型文件和 label_map 文件是否存在且可加载。
+    """
+    return reload_runtime_model(
+        model_path=request.modelPath,
+        label_map_path=request.labelMapPath,
+        version_name=request.versionName,
+    )
+
+
+@app.get("/model/current")
+async def current_model():
+    """查询当前运行时模型信息。"""
+    return get_runtime_model_info()
 
 @app.websocket("/ws/gesture")
 async def gesture_ws(websocket: WebSocket):

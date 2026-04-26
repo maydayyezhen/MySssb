@@ -55,8 +55,19 @@ class GesturePredictSession:
         self.confidence_threshold = confidence_threshold
         self.max_missing_frames = max_missing_frames
 
-        model_path = Path(model_path) if model_path else DEFAULT_MODEL_PATH
-        label_map_path = Path(label_map_path) if label_map_path else DEFAULT_LABEL_MAP_PATH
+        if model_path is None or label_map_path is None:
+            from src.utils.runtime_model_registry import get_runtime_model_paths
+
+            runtime_model_path, runtime_label_map_path = get_runtime_model_paths()
+
+            if model_path is None:
+                model_path = runtime_model_path if runtime_model_path else DEFAULT_MODEL_PATH
+
+            if label_map_path is None:
+                label_map_path = runtime_label_map_path if runtime_label_map_path else DEFAULT_LABEL_MAP_PATH
+
+        model_path = Path(model_path)
+        label_map_path = Path(label_map_path)
 
         if not model_path.exists():
             raise FileNotFoundError(f"模型文件不存在：{model_path}")
