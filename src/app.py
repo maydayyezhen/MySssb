@@ -442,7 +442,6 @@ async def gesture_ws(websocket: WebSocket):
                 if msg_type == "start":
                     started = True
 
-
                     if session is not None:
                         session.close()
                     session = GesturePredictSession()
@@ -454,7 +453,11 @@ async def gesture_ws(websocket: WebSocket):
                         "confidence": 0.0,
                         "validFrames": 0,
                         "windowSize": WINDOW_SIZE,
-                        "hasValidHand": False
+                        "hasValidHand": False,
+                        "modelVersionName": session.model_version_name,
+                        "modelPath": session.model_path,
+                        "labelMapPath": session.label_map_path,
+                        "usingPublishedModel": session.using_published_model,
                     })
                 else:
                     await websocket.send_json({
@@ -484,7 +487,6 @@ async def gesture_ws(websocket: WebSocket):
 
                 raw_result = session.process_frame(frame, draw_landmarks=True)
 
-
                 result = {
                     "type": "result",
                     "status": raw_result["status"],
@@ -493,7 +495,11 @@ async def gesture_ws(websocket: WebSocket):
                     "validFrames": raw_result["valid_frames"],
                     "windowSize": raw_result["window_size"],
                     "hasValidHand": raw_result["has_valid_hand"],
-                    "landmarks": raw_result["landmarks"]
+                    "landmarks": raw_result["landmarks"],
+                    "modelVersionName": raw_result["model_version_name"],
+                    "modelPath": raw_result["model_path"],
+                    "labelMapPath": raw_result["label_map_path"],
+                    "usingPublishedModel": raw_result["using_published_model"],
                 }
 
                 # 本地调试窗口：显示前端输入图像 + 当前识别结果

@@ -55,10 +55,21 @@ class GesturePredictSession:
         self.confidence_threshold = confidence_threshold
         self.max_missing_frames = max_missing_frames
 
+        runtime_snapshot = {
+            "modelVersionName": "default",
+            "modelPath": "",
+            "labelMapPath": "",
+            "usingPublishedModel": False,
+        }
+
         if model_path is None or label_map_path is None:
-            from src.utils.runtime_model_registry import get_runtime_model_paths
+            from src.utils.runtime_model_registry import (
+                get_runtime_model_paths,
+                get_runtime_model_snapshot,
+            )
 
             runtime_model_path, runtime_label_map_path = get_runtime_model_paths()
+            runtime_snapshot = get_runtime_model_snapshot()
 
             if model_path is None:
                 model_path = runtime_model_path if runtime_model_path else DEFAULT_MODEL_PATH
@@ -68,6 +79,11 @@ class GesturePredictSession:
 
         model_path = Path(model_path)
         label_map_path = Path(label_map_path)
+
+        self.model_version_name = runtime_snapshot.get("modelVersionName", "default")
+        self.model_path = str(model_path)
+        self.label_map_path = str(label_map_path)
+        self.using_published_model = bool(runtime_snapshot.get("usingPublishedModel", False))
 
         if not model_path.exists():
             raise FileNotFoundError(f"模型文件不存在：{model_path}")
@@ -318,4 +334,8 @@ class GesturePredictSession:
             "valid_frames": len(self.frame_parts_window),
             "window_size": self.window_size,
             "landmarks": landmarks,
+            "model_version_name": self.model_version_name,
+            "model_path": self.model_path,
+            "label_map_path": self.label_map_path,
+            "using_published_model": self.using_published_model,
         }

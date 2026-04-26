@@ -90,3 +90,15 @@ def get_runtime_model_info() -> Dict:
         "modelPath": str(_current_model_path) if _current_model_path else "",
         "labelMapPath": str(_current_label_map_path) if _current_label_map_path else "",
     }
+
+def get_runtime_model_snapshot() -> Dict:
+    """获取当前运行时模型快照。
+
+    用于 GesturePredictSession 初始化时记录当前会话使用的模型版本。
+    """
+    return {
+        "modelVersionName": _current_version_name or "default",
+        "modelPath": str(_current_model_path) if _current_model_path else "",
+        "labelMapPath": str(_current_label_map_path) if _current_label_map_path else "",
+        "usingPublishedModel": _current_model_path is not None and _current_label_map_path is not None,
+    }
