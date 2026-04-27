@@ -13,7 +13,10 @@ from src.utils.runtime_model_registry import (
     get_runtime_model_info,
 )
 from src.utils.raw_feature_converter import convert_raw_dataset_to_features
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.responses import FileResponse
+from urllib.request import urlopen
+from urllib.error import URLError, HTTPError
 from src.utils.raw_dataset_scanner import scan_raw_dataset
 
 from src.predict import GesturePredictSession
@@ -24,6 +27,8 @@ from src.config.gesture_config import (
     RAW_SAMPLE_FRAME_COUNT,
     SWAP_HANDEDNESS,
     SWAP_POSE_LR,
+    MODEL_FILE_NAME,
+    LABEL_MAP_FILE_NAME,
 )
 from src.utils.mediapipe_raw import extract_raw_mediapipe_frame
 from src.utils.raw_dataset_writer import save_raw_sample
@@ -328,6 +333,84 @@ def show_dataset_debug_window(frame,
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RAW_DATA_ROOT = PROJECT_ROOT / RAW_PHONE_DATA_DIR_NAME
 
+ARTIFACTS_ROOT = PROJECT_ROOT / "artifacts"
+RUNTIME_MODEL_ROOT = PROJECT_ROOT / "runtime_models"
+
+ALLOWED_ARTIFACT_FILES = {
+    MODEL_FILE_NAME,
+    LABEL_MAP_FILE_NAME,
+    "training_curve.png",
+    "confusion_matrix.png",
+    "eval_result.txt",
+}
+
+ARTIFACT_MEDIA_TYPES = {
+    MODEL_FILE_NAME: "application/octet-stream",
+    LABEL_MAP_FILE_NAME: "application/json",
+    "training_curve.png": "image/png",
+    "confusion_matrix.png": "image/png",
+    "eval_result.txt": "text/plain; charset=utf-8",
+}
+
+
+def sanitize_runtime_name(value: str) -> str:
+    """将模型版本名转换为安全的本地缓存目录名。"""
+    text = str(value or "").strip()
+    if text == "":
+        text = "current"
+
+    return "".join(
+        ch if ch.isalnum() or ch in ("_", "-", ".") else "_"
+        for ch in text
+    )
+
+
+def resolve_artifact_file(run_name: str, file_name: str) -> Path:
+    """解析训练产物文件路径，并限制只能读取 artifacts 目录下的白名单文件。"""
+    if not run_name or "/" in run_name or "\\" in run_name or ".." in run_name:
+        raise HTTPException(status_code=400, detail="非法的训练运行名称")
+
+    if file_name not in ALLOWED_ARTIFACT_FILES:
+        raise HTTPException(status_code=400, detail=f"不允许访问的训练产物文件：{file_name}")
+
+    artifacts_root = ARTIFACTS_ROOT.resolve()
+    file_path = (artifacts_root / run_name / file_name).resolve()
+
+    if not file_path.is_relative_to(artifacts_root):
+        raise HTTPException(status_code=400, detail="非法的训练产物路径")
+
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail=f"训练产物不存在：{run_name}/{file_name}")
+
+    return file_path
+
+
+def download_url_to_file(url: str, target_path: Path) -> None:
+    """从 URL 下载文件到本地路径。"""
+    if not url.startswith("http://") and not url.startswith("https://"):
+        raise HTTPException(status_code=400, detail="只支持 http / https 文件地址")
+
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        with urlopen(url, timeout=60) as response:
+            with open(target_path, "wb") as output:
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+    except HTTPError as exception:
+        raise HTTPException(
+            status_code=502,
+            detail=f"下载模型文件失败，HTTP 状态码：{exception.code}"
+        )
+    except URLError as exception:
+        raise HTTPException(
+            status_code=502,
+            detail=f"下载模型文件失败，URL 不可访问：{exception}"
+        )
+
 app = FastAPI(title="MySssb Gesture Service")
 
 
@@ -383,11 +466,33 @@ async def train_model():
     """
     return run_training(PROJECT_ROOT)
 
+@app.get("/artifacts/{run_name}/{file_name}")
+async def get_artifact_file(run_name: str, file_name: str):
+    """下载指定训练产物文件。
+
+    该接口只允许访问 artifacts/{run_name}/ 下的白名单文件，
+    给 Spring Boot 接管训练产物到 MinIO 使用。
+    """
+    file_path = resolve_artifact_file(run_name, file_name)
+
+    return FileResponse(
+        path=str(file_path),
+        media_type=ARTIFACT_MEDIA_TYPES.get(file_name, "application/octet-stream"),
+        filename=file_name,
+    )
+
 class ModelReloadRequest(BaseModel):
     """模型重载请求。"""
 
     modelPath: str
     labelMapPath: str
+    versionName: str = ""
+
+class ModelReloadFromUrlRequest(BaseModel):
+    """从 MinIO URL 重载模型请求。"""
+
+    modelUrl: str
+    labelMapUrl: str
     versionName: str = ""
 
 
@@ -404,6 +509,30 @@ async def reload_model(request: ModelReloadRequest):
         model_path=request.modelPath,
         label_map_path=request.labelMapPath,
         version_name=request.versionName,
+    )
+
+@app.post("/model/reload-from-url")
+async def reload_model_from_url(request: ModelReloadFromUrlRequest):
+    """从 MinIO URL 下载模型文件并重载当前运行时模型。
+
+    说明：
+    1. MinIO 是长期存储；
+    2. Python runtime_models 是运行缓存；
+    3. Python 内存中只维护当前启用的一个模型。
+    """
+    version_name = request.versionName or "current"
+    runtime_dir = RUNTIME_MODEL_ROOT / sanitize_runtime_name(version_name)
+
+    local_model_path = runtime_dir / MODEL_FILE_NAME
+    local_label_map_path = runtime_dir / LABEL_MAP_FILE_NAME
+
+    download_url_to_file(request.modelUrl, local_model_path)
+    download_url_to_file(request.labelMapUrl, local_label_map_path)
+
+    return reload_runtime_model(
+        model_path=str(local_model_path),
+        label_map_path=str(local_label_map_path),
+        version_name=version_name,
     )
 
 
