@@ -868,3 +868,65 @@ bucket acc:
 04_count_11_50   v2 0.1861 -> v7 0.1165
 05_count_51_plus v2 0.5761 -> v7 0.5029
 ```
+
+---
+
+## 18. v8-v15 结果更新
+
+本节比上面的旧推荐更新，后续看结果以这里和 `versions/README.md` 为准。
+
+```text
+v008_raw_delta_tcn_frontend:
+  best_dev_TER  = 0.8775
+  best_dev_loss = 6.4803
+  结论：TCN 前端明显落后 v2，早停。
+
+v009_raw_delta_presence_mask:
+  best_dev_TER  = 0.8711
+  best_dev_loss = 6.5103
+  结论：显式 hand presence mask 没有帮助，早停。
+
+v010_raw_delta_packed_lstm:
+  best_dev_TER  = 0.8466
+  best_dev_loss = 6.3419
+  结论：packed LSTM 反而明显变差，早停。
+
+v011_raw_delta_transformer_ctc:
+  best_dev_TER  = 0.7520
+  best_dev_loss = 5.5395
+  结论：Transformer 能学，但输出更短，deletion 更高，不如 v2。
+
+v012_raw_delta_finetune_v2_lr2e4:
+  best_dev_TER  = 0.6940
+  best_dev_loss = 7.2620
+  best epoch    = 7
+  结论：从 v2 best checkpoint 低 LR 续训有效，是当前最佳训练 checkpoint。
+  解码校准：v12 + beam3/top20 + blank penalty/insert bonus 最低 dev_TER = 0.6889。
+
+v013_raw_delta_blankpenalty_finetune:
+  best_dev_TER  = 0.6910
+  best_dev_loss = 7.3869
+  best epoch    = 0
+  结论：blank penalty 作为解码校准有效，但继续训练没有提升。
+
+v014_raw_delta_finetune_swa:
+  best_dev_TER  = 0.6932
+  best_dev_loss = 7.3367
+  best epoch    = 14
+  结论：SWA 未胜出；v14 greedy 略好于 v12 greedy，但解码校准不如 v12。
+
+v015_raw_delta_finetune_seed2026:
+  not run
+  结论：已创建但按用户要求暂停，暂不比较。
+```
+
+当前结论：
+```text
+最佳训练 checkpoint:
+  v012_raw_delta_finetune_v2_lr2e4
+  greedy dev_TER = 0.6940
+
+当前最低 dev TER:
+  v012 checkpoint + decode calibration
+  dev_TER = 0.6889
+```

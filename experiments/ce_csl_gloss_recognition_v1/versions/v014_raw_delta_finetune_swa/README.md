@@ -31,8 +31,20 @@ D:\MySssb\.venv\Scripts\python.exe experiments\ce_csl_gloss_recognition_v1\versi
 
 ## Result
 
-- Running.
+- Best checkpoint:
+  - `best_dev_TER = 0.6932`
+  - `best_dev_TER_epoch = 14`
+  - `best_dev_TER_source = model`
+  - `best_dev_loss = 7.3367`
+- SWA did not beat the normal model checkpoint.
+- Best SWA values stayed around `0.6966-0.6979` after the running average stabilized.
+- Decode probes on v14 best checkpoint:
+  - Greedy: `TER = 0.6932`
+  - Greedy + blank penalty `0.45`: `TER = 0.6927`
+  - Best observed beam decode: `beam_size=3`, `top_k=20`, blank penalty `0.30`, token insert bonus `0.10`, `TER = 0.6914`
 
 ## Conclusion
 
-- Pending.
+- SWA/weight averaging smoothed the checkpoint behavior but also washed out the better early local point.
+- v14 greedy slightly beats v12 greedy (`0.6932` vs `0.6940`), but v14 decode calibration does not beat v12 decode calibration (`0.6914` vs `0.6889`).
+- This route is useful as evidence that averaging is not the missing lever.

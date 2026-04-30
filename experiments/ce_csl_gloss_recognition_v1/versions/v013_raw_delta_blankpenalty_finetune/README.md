@@ -31,8 +31,24 @@ D:\MySssb\.venv\Scripts\python.exe experiments\ce_csl_gloss_recognition_v1\versi
 
 ## Result
 
-- Running.
+- Source checkpoint: `v012_raw_delta_finetune_v2_lr2e4/best_dev_ter.pt`
+  - source greedy `dev_TER = 0.6940`
+- Epoch 0 with blank logit penalty `0.45`:
+  - `best_dev_TER = 0.6910`
+  - `best_dev_loss = 7.3869`
+  - `avgPredictionLength = 3.3476`
+  - `avgReferenceLength = 4.5184`
+  - `emptyPredictionRatio = 0.0019`
+- Continued training with the same blank penalty early-stopped at epoch 12.
+- No epoch after 0 improved TER.
+- Prediction diagnosis at epoch 0:
+  - `tokenAccuracy = 0.3245`
+  - `deleteRate = 0.2746`
+  - `substituteRate = 0.4009`
+  - `insertPerReferenceToken = 0.0155`
 
 ## Conclusion
 
-- Pending.
+- Blank penalty helps at decode/evaluation time by reducing deletion and increasing prediction length.
+- Training with the blank penalty did not produce a better model; the model compensates during fine-tuning and dev TER gets worse.
+- Treat blank penalty as a decode-time calibration, not as the next training objective.

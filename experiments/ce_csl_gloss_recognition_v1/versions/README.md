@@ -7,7 +7,7 @@
 | Version | Main change | Best dev TER | Best dev loss | Conclusion |
 |---|---:|---:|---:|---|
 | v001_raw | raw feature baseline | 0.7228 | 5.4695 | 被 raw_delta 超过 |
-| v002_raw_delta | raw + delta baseline | 0.7018 | 5.3171 | 当前最佳 |
+| v002_raw_delta | raw + delta baseline | 0.7018 | 5.3171 | 原始最佳 baseline |
 | v003_raw_delta_reg | 更强正则 + dev_loss scheduler | 0.7069 | 5.2157 | loss 更稳但 TER 不如 v2 |
 | v004_raw_delta_ter_scheduler | dev_TER scheduler | 0.7039 | 5.3171 | 接近 v2 但未超过 |
 | v005_raw_delta_hidden384 | hidden_size=384 | 0.8101 | 6.3493 | 明显变差 |
@@ -17,12 +17,13 @@
 | v009_raw_delta_presence_mask | raw_delta + hand presence mask | 0.8711 | 6.5103 | 早停，明显落后 v2 |
 | v010_raw_delta_packed_lstm | raw_delta + packed BiLSTM | 0.8466 | 6.3419 | 早停，明显落后 v2 |
 | v011_raw_delta_transformer_ctc | raw_delta + Transformer CTC | 0.7520 | 5.5395 | 能学但输出更短，不如 v2 |
-| v012_raw_delta_finetune_v2_lr2e4 | raw_delta + fine-tune v2 best checkpoint | Running | Running | 低学习率续训 v2 最佳点 |
-| v013_raw_delta_blankpenalty_finetune | raw_delta + blank-penalty fine-tune | Running | Running | 针对输出偏短和 deletion 做校准续训 |
-| v014_raw_delta_finetune_swa | raw_delta + fine-tune with SWA averaging | Running | Running | 平滑 v12 早期 checkpoint 抖动 |
-| v015_raw_delta_finetune_seed2026 | raw_delta + fine-tune seed 2026 | Running | Running | 检查低 LR 续训对 seed/batch order 的敏感性 |
+| v012_raw_delta_finetune_v2_lr2e4 | raw_delta + fine-tune v2 best checkpoint | 0.6940 | 7.2620 | 当前最佳训练路线；配合 beam/blank 解码最低 0.6889 |
+| v013_raw_delta_blankpenalty_finetune | raw_delta + blank-penalty fine-tune | 0.6910 | 7.3869 | epoch0 解码校准有效，继续训练无提升 |
+| v014_raw_delta_finetune_swa | raw_delta + fine-tune with SWA averaging | 0.6932 | 7.3367 | SWA 未胜出，beam/blank 最低 0.6914 |
+| v015_raw_delta_finetune_seed2026 | raw_delta + fine-tune seed 2026 | Not run | Not run | 已创建但按用户要求暂停，未训练 |
 
-当前最佳仍是 `v002_raw_delta`。v007 说明单纯低频样本重采样不够，下一步应回到 v2 配置上改输入表示或时序建模。
+当前最佳训练 checkpoint 是 `v012_raw_delta_finetune_v2_lr2e4`，greedy `best_dev_TER = 0.6940`。
+当前最低验证 TER 是 v12 checkpoint 上的解码校准结果：`beam_size=3`、`top_k=20`、blank penalty 约 `0.45-0.60`、token insert bonus 约 `0.1-0.3`，最低 `dev_TER = 0.6889`。
 
 ## Version-specific Tools
 

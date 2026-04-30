@@ -31,8 +31,9 @@ D:\MySssb\.venv\Scripts\python.exe experiments\ce_csl_gloss_recognition_v1\versi
 
 ## Result
 
-- Running.
+- Not run.
+- This version was drafted but paused before training per user request.
 
 ## Conclusion
 
-- Pending.
+- No result. Do not compare this version against previous experiments unless it is explicitly run later.

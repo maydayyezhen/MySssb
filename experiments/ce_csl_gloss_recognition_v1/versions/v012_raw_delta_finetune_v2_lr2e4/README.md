@@ -31,8 +31,32 @@ D:\MySssb\.venv\Scripts\python.exe experiments\ce_csl_gloss_recognition_v1\versi
 
 ## Result
 
-- Running.
+- Source `v002_raw_delta` checkpoint:
+  - `epoch = 59`
+  - `dev_TER = 0.7018`
+  - `dev_loss = 7.2732`
+- Fine-tune stopped manually after epoch 24 because dev TER had rebounded.
+- Best greedy checkpoint:
+  - `best_dev_TER = 0.6940`
+  - `best_dev_TER_epoch = 7`
+  - `best_dev_TER_dev_loss = 7.4620`
+  - `best_dev_loss = 7.2620`
+  - `best_dev_loss_epoch = 1`
+- Prediction diagnosis for best TER checkpoint:
+  - `avgPredictionLength = 3.2136`
+  - `avgReferenceLength = 4.5184`
+  - `emptyPredictionRatio = 0.0019`
+  - `tokenAccuracy = 0.3167`
+  - `deleteRate = 0.2995`
+  - `substituteRate = 0.3838`
+  - `insertPerReferenceToken = 0.0107`
+- Decode probes on this checkpoint:
+  - Greedy + blank penalty `0.45` or `0.60`: `TER = 0.6910`
+  - Beam search best observed: `beam_size=3`, `top_k=20`, blank penalty around `0.45-0.60`, token insert bonus around `0.1-0.3`
+  - Best observed decode TER: `0.6889`
 
 ## Conclusion
 
-- Pending.
+- 这是目前最重要的训练版本：从 v2 最佳 checkpoint 低学习率续训，greedy TER 从 `0.7018` 降到 `0.6940`。
+- 主要错误仍然是输出偏短，平均预测长度 `3.2136` 明显低于真实平均长度 `4.5184`。
+- 最低 dev TER 不是靠继续训练得到，而是靠 v12 checkpoint 上的 blank/beam 解码校准得到：`0.6889`。
