@@ -13,3 +13,5 @@ fastapi
 uvicorn==0.44.0
 
 websockets
+
+torch
