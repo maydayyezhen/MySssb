@@ -2,8 +2,10 @@
 """Sentence video recognition orchestration."""
 
 import asyncio
+import shutil
 import time
 import uuid
+from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException, UploadFile
@@ -19,54 +21,89 @@ from src.sentence_video.wlasl_pipeline.inference import recognize_wlasl_sentence
 from src.sentence_video.zh_map import sequence_to_zh_text, to_zh
 
 
+ALLOWED_VIDEO_SUFFIXES = {".mp4", ".mov", ".avi", ".mkv"}
+
+
 async def recognize_sentence_video(file: UploadFile) -> SentenceRecognizeResponse:
     """Save an uploaded video, run sentence inference, and normalize the response."""
+    suffix = validate_upload_file_name(file)
     request_id = uuid.uuid4().hex
     work_dir = CONFIG.tmp_root / request_id
-    input_path = work_dir / "input.mp4"
-
-    started_at = time.perf_counter()
-    await save_upload_file(file, input_path)
-
-    if not input_path.exists() or input_path.stat().st_size == 0:
-        raise HTTPException(status_code=400, detail="上传视频为空")
+    input_path = work_dir / f"input{suffix}"
 
     try:
-        inference_result = await asyncio.wait_for(
-            asyncio.to_thread(
-                recognize_wlasl_sentence_video,
-                video_path=input_path,
-                feature_dir=CONFIG.feature_dir,
-                model_dir=CONFIG.model_dir,
-                window_size=CONFIG.window_size,
-                stride=CONFIG.stride,
-                confidence_threshold=CONFIG.confidence_threshold,
-                margin_threshold=CONFIG.margin_threshold,
-                min_segment_windows=CONFIG.min_segment_windows,
-                min_segment_avg_confidence=CONFIG.min_segment_avg_confidence,
-                min_segment_max_confidence=CONFIG.min_segment_max_confidence,
-                same_label_merge_gap=CONFIG.same_label_merge_gap,
-                nms_suppress_radius=CONFIG.nms_suppress_radius,
-            ),
-            timeout=CONFIG.inference_timeout_sec,
-        )
-    except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail="句子视频识别超时")
-    except FileNotFoundError as exception:
-        raise HTTPException(status_code=500, detail=str(exception))
-    except RuntimeError as exception:
-        raise HTTPException(status_code=500, detail=str(exception))
-    except Exception as exception:
+        started_at = time.perf_counter()
+        await save_upload_file(file, input_path)
+
+        if not input_path.exists() or input_path.stat().st_size == 0:
+            raise HTTPException(status_code=400, detail="上传视频为空")
+
+        validate_upload_file_size(input_path)
+
+        try:
+            inference_result = await asyncio.wait_for(
+                asyncio.to_thread(
+                    recognize_wlasl_sentence_video,
+                    video_path=input_path,
+                    feature_dir=CONFIG.feature_dir,
+                    model_dir=CONFIG.model_dir,
+                    window_size=CONFIG.window_size,
+                    stride=CONFIG.stride,
+                    confidence_threshold=CONFIG.confidence_threshold,
+                    margin_threshold=CONFIG.margin_threshold,
+                    min_segment_windows=CONFIG.min_segment_windows,
+                    min_segment_avg_confidence=CONFIG.min_segment_avg_confidence,
+                    min_segment_max_confidence=CONFIG.min_segment_max_confidence,
+                    same_label_merge_gap=CONFIG.same_label_merge_gap,
+                    nms_suppress_radius=CONFIG.nms_suppress_radius,
+                ),
+                timeout=CONFIG.inference_timeout_sec,
+            )
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="句子视频识别超时")
+        except FileNotFoundError as exception:
+            raise HTTPException(status_code=500, detail=str(exception))
+        except RuntimeError as exception:
+            raise HTTPException(status_code=500, detail=str(exception))
+        except Exception as exception:
+            raise HTTPException(
+                status_code=500,
+                detail=f"句子视频识别失败：{exception}",
+            )
+
+        payload = inference_result["payload"]
+        dense_rows = inference_result["dense_rows"]
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+
+        return _build_response(payload, dense_rows, elapsed_ms)
+    finally:
+        if not CONFIG.keep_tmp:
+            shutil.rmtree(work_dir, ignore_errors=True)
+
+
+def validate_upload_file_name(file: UploadFile) -> str:
+    """Validate uploaded video filename and return its normalized suffix."""
+    filename = file.filename or ""
+    suffix = Path(filename).suffix.lower()
+
+    if suffix not in ALLOWED_VIDEO_SUFFIXES:
         raise HTTPException(
-            status_code=500,
-            detail=f"句子视频识别失败：{exception}",
+            status_code=400,
+            detail="只支持 mp4/mov/avi/mkv 视频文件",
         )
 
-    payload = inference_result["payload"]
-    dense_rows = inference_result["dense_rows"]
-    elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+    return suffix
 
-    return _build_response(payload, dense_rows, elapsed_ms)
+
+def validate_upload_file_size(input_path: Path) -> None:
+    """Validate uploaded video size against configured maximum."""
+    max_bytes = CONFIG.max_upload_mb * 1024 * 1024
+
+    if input_path.stat().st_size > max_bytes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"视频文件过大，最大允许 {CONFIG.max_upload_mb} MB",
+        )
 
 
 def _build_response(
@@ -142,6 +179,7 @@ def _build_segment_top_k(
                 labelZh=to_zh(raw_label),
                 avgProb=avg_confidence,
                 maxProb=max_confidence,
+                hitCount=_parse_int(segment.get("window_count")),
             )
         ]
 
@@ -154,6 +192,7 @@ def _build_segment_top_k(
                 labelZh=to_zh(label),
                 avgProb=round(avg_prob, 6),
                 maxProb=round(max(values), 6),
+                hitCount=len(values),
             )
         )
 

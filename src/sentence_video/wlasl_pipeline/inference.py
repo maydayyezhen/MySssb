@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import tensorflow as tf
 
+from src.sentence_video.runtime import get_sentence_model_runtime
 from src.sentence_video.wlasl_pipeline.infer_wlasl_sentence_video import (
     build_raw_segments,
     build_result_cache,
@@ -14,7 +14,6 @@ from src.sentence_video.wlasl_pipeline.infer_wlasl_sentence_video import (
     compare_sequence,
     filter_segments,
     get_video_info,
-    load_json,
     make_dense_rows,
     nms_segments,
     parse_expected,
@@ -37,18 +36,11 @@ def recognize_wlasl_sentence_video(
     nms_suppress_radius: int = 6,
 ) -> dict[str, Any]:
     """Run WLASL sentence inference and return in-memory segment data."""
-    labels_payload = load_json(feature_dir / "labels.json")
-    labels = labels_payload["labels"]
-
-    model_path = model_dir / "best_wlasl_20f_plus_classifier.keras"
-    if not model_path.exists():
-        model_path = model_dir / "wlasl_20f_plus_classifier.keras"
-
-    if not model_path.exists():
-        raise FileNotFoundError(f"WLASL 模型文件不存在：{model_path}")
-
-    model = tf.keras.models.load_model(model_path)
-    feature_dim = int(model.input_shape[-1])
+    runtime = get_sentence_model_runtime(feature_dir, model_dir)
+    model = runtime.model
+    labels = runtime.labels
+    model_path = runtime.model_path
+    feature_dim = runtime.feature_dim
 
     video_info = get_video_info(video_path)
     frames, results, pose_flags, hand_flags = build_result_cache(video_path)

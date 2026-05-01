@@ -1,300 +1,217 @@
-# MySssb
+# MySssb / HearBridge Gesture Service
 
-一个基于 **MediaPipe Hands + 1D CNN** 的手势识别小项目。  
-当前 1.0 版本已经完成从 **数据采集、特征构造、模型训练、训练曲线绘制、验证集评估** 到 **模型保存** 的完整闭环。
+HearBridge 的 Python 手势识别服务，负责视觉识别、数据采集、训练和模型运行时管理。业务编排、识别记录保存、DeepSeek 语义增强等能力由 Java / Spring Boot 侧完成。
 
-当前版本目标不是做一个很大的系统，而是先把一条最小可用链路稳定跑通。
+## 1. 项目定位
 
----
+本仓库是 HearBridge 后端体系中的 Python 识别服务：
 
-## 1. 项目简介
+- 使用 MediaPipe 提取手部 / 姿态关键点。
+- 使用 TensorFlow / Keras 模型做单词级实时识别和句子视频离线识别。
+- 通过 FastAPI 对 Java / HarmonyOS 暴露稳定接口。
+- 保留 `experiments/` 作为实验脚本和模型探索目录，正式服务入口在 `src/`。
 
-本项目面向单手手势识别场景，使用 MediaPipe 提取手部关键点，再基于自定义特征构造方式，将连续 30 帧动作序列输入 1D CNN 进行分类。
+## 2. 当前服务能力
 
-当前版本重点完成了以下工作：
+- 实时单词识别 WebSocket。
+- 手机 raw dataset 采集 WebSocket。
+- raw dataset 样本扫描。
+- raw dataset 转 feature 数据集。
+- 单词识别模型训练。
+- 训练产物下载。
+- 运行时模型状态查询和重载。
+- 句子视频上传识别。
+- gloss 中文展示映射。
 
-- 摄像头采集手势样本
-- 构造单帧 80 维特征
-- 组织为 `(30, 80)` 的时序样本
-- 训练 1D CNN 分类模型
-- 自动绘制训练曲线
-- 自动输出验证集评估结果与混淆矩阵
-- 保存模型和标签映射
-
----
-
-## 2. 当前版本特征说明
-
-当前版本的特征设计思路整理如下：
-
-- 当前版本使用 **world landmarks**
-- 当前版本使用 **尺度归一化**
-- 当前版本加入 **关节角度特征**
-- 当前版本的关节角度特征使用 **角度余弦值** 表示
-- 当前版本补充少量 **整体平移特征**
-- 当前先把 **单帧 80 维、样本 `(30, 80)`** 这条链跑通
-- 图像归一化坐标本身不适合直接作为跨长宽比场景下的主特征
-- world landmarks 更适合作为主特征，图像坐标只适合少量补充整体运动信息
-
-### 2.1 坐标处理方式对照
-
-- 直接使用原始 world landmarks
-- 使用做了尺度归一化的 world landmarks
-- 使用“先减去手腕坐标，再做尺度归一化”的 world landmarks
-
-### 2.2 角度表示方式对照
-
-- 使用角度余弦值作为角度特征，范围为 `-1 ~ 1`
-- 使用角度值作为角度特征，范围为 `0 ~ 180`
-
----
-
-## 3. 特征结构说明
-
-### 3.1 单帧特征
-
-当前单帧基础特征由两部分组成：
-
-1. **21 个 world landmarks 的三维坐标**
-   - 共 `21 × 3 = 63` 维
-   - 使用 `0 -> 9` 的距离做尺度归一化
-
-2. **15 个关节角度余弦值**
-   - 共 `15` 维
-
-因此，单帧基础特征总维度为：
-
-`63 + 15 = 78`
-
-### 3.2 时序样本
-
-在采集或预测时，会额外从 image landmarks 中提取掌心中心，并补充 **2 维整体运动特征**：
-
-- `motion_x`
-- `motion_y`
-
-因此最终每帧特征为：
-
-`78 + 2 = 80`
-
-一个完整样本由连续 `30` 帧组成，因此最终样本形状为：
-
-`(30, 80)`
-
----
-
-## 4. 当前主要文件说明
-
-### 根目录
-
-- `requirements.txt`：项目依赖
-- `gesture_notes.md`：当前版本的特征设计备注
-- `data_processed/`：处理后的数据集目录
-- `artifacts/`：训练输出目录
-
-### `src/`
-
-- `create_dataset.py`：摄像头采集数据，保存为 `.npy` 样本
-- `train.py`：训练模型、绘图、评估、保存模型
-
-### `src/utils/`
-
-- `hand_features.py`：单帧特征构造相关函数
-- `dataset_loader.py`：数据读取、分层划分、标签分布打印
-
----
-
-## 5. 环境依赖
-
-当前项目依赖如下：
-
-```txt
-tensorflow==2.15.1
-mediapipe==0.10.21
-opencv-python==4.11.0.86
-numpy==1.26.4
-matplotlib==3.10.8
-```
-
-安装方式：
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-## 6. 数据组织方式
-
-采集后的数据默认保存在 `data_processed/` 下，按标签分目录组织，例如：
+## 3. 目录结构
 
 ```text
-data_processed/
-├─ hello/
-│  ├─ sample_001.npy
-│  ├─ sample_002.npy
-├─ call/
-│  ├─ sample_001.npy
-├─ unknown/
-│  ├─ sample_001.npy
+src/
+├─ app.py                         # FastAPI 总入口
+├─ app_legacy.py                  # 旧入口备份
+├─ word_recognition/              # 单词级识别完整模块
+│  ├─ realtime/                   # /ws/gesture
+│  ├─ dataset/                    # /ws/dataset, raw 样本扫描
+│  ├─ training/                   # raw->feature, 训练, 产物下载
+│  ├─ model_runtime/              # 运行时模型状态与重载
+│  ├─ config/
+│  ├─ utils/
+│  ├─ predict.py
+│  └─ train.py
+└─ sentence_video/                # 句子视频识别模块
+   ├─ router.py
+   ├─ service.py
+   ├─ config.py
+   ├─ runtime.py                  # 句子模型运行时缓存
+   ├─ schemas.py
+   ├─ zh_map.py
+   ├─ video_io.py
+   └─ wlasl_pipeline/             # 从实验目录复制的 WLASL 推理链
 ```
 
-其中每个 `.npy` 文件对应一个完整样本，形状应为：
+## 4. Python / Java / HarmonyOS 职责边界
 
-```python
-(30, 80)
-```
+Python：
 
----
+- MediaPipe 关键点检测。
+- TensorFlow 模型推理。
+- 实时识别。
+- 句子视频识别。
+- 数据采集和训练。
 
-## 7. 使用方法
+Java / Spring Boot：
 
-### 7.1 采集数据
+- 用户、课程、训练记录等业务数据。
+- 文件上传业务入口。
+- 调用 Python 识别服务。
+- 调用 DeepSeek。
+- 保存识别结果。
+- 管理端权限和模型版本记录。
 
-运行：
+HarmonyOS：
 
-```bash
-python src/create_dataset.py
-```
+- 相机采集。
+- 视频上传。
+- 数字人播放。
+- 识别结果展示。
 
-程序会先要求输入当前采集的标签名，例如：
+## 5. 接口列表
 
 ```text
-请输入当前采集的手势标签：hello
+GET  /health
+WS   /ws/gesture
+WS   /ws/dataset
+GET  /dataset/raw/samples
+POST /dataset/raw/convert-to-features
+POST /model/train
+GET  /artifacts/{run_name}/{file_name}
+GET  /model/current
+POST /model/reload
+POST /model/reload-from-url
+POST /api/sentence/recognize
 ```
 
-进入采集界面后：
+## 6. 启动方式
 
-- `S`：开始采集一个样本
-- `Y`：保存当前样本
-- `N`：丢弃当前样本
-- `Q`：退出
+```powershell
+cd D:\MySssb
+D:\MySssb\.venv\Scripts\python.exe -m uvicorn src.app:app --host 0.0.0.0 --port 8000
+```
 
-采集完成后，样本会保存到：
+依赖安装：
+
+```powershell
+D:\MySssb\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+## 7. 句子视频识别配置
+
+句子视频识别配置在 `src/sentence_video/config.py` 中，默认使用当前本机 WLASL-mini-v2-25 路径。Windows 路径可通过环境变量覆盖。
 
 ```text
-data_processed/当前标签名/sample_XXX.npy
+SENTENCE_VIDEO_FEATURE_DIR
+SENTENCE_VIDEO_MODEL_DIR
+SENTENCE_VIDEO_TMP_ROOT
+SENTENCE_VIDEO_TIMEOUT_SEC
+SENTENCE_VIDEO_WINDOW_SIZE
+SENTENCE_VIDEO_STRIDE
+SENTENCE_VIDEO_CONFIDENCE_THRESHOLD
+SENTENCE_VIDEO_MARGIN_THRESHOLD
+SENTENCE_VIDEO_MIN_SEGMENT_WINDOWS
+SENTENCE_VIDEO_MIN_SEGMENT_AVG_CONFIDENCE
+SENTENCE_VIDEO_MIN_SEGMENT_MAX_CONFIDENCE
+SENTENCE_VIDEO_SAME_LABEL_MERGE_GAP
+SENTENCE_VIDEO_NMS_SUPPRESS_RADIUS
+SENTENCE_VIDEO_MAX_UPLOAD_MB
+SENTENCE_VIDEO_KEEP_TMP
 ```
 
----
+示例：
 
-### 7.2 训练模型
-
-运行：
-
-```bash
-python src/train.py
+```powershell
+$env:SENTENCE_VIDEO_FEATURE_DIR="D:/datasets/WLASL-mini-v2-25/features_20f_plus"
+$env:SENTENCE_VIDEO_MODEL_DIR="D:/datasets/WLASL-mini-v2-25/models_20f_plus"
+$env:SENTENCE_VIDEO_MAX_UPLOAD_MB="50"
+$env:SENTENCE_VIDEO_KEEP_TMP="false"
 ```
 
-训练过程会自动完成以下工作：
+上传视频仅允许 `.mp4`、`.mov`、`.avi`、`.mkv`。默认请求结束后删除 `tmp/sentence_video/{request_id}`；调试时可设置 `SENTENCE_VIDEO_KEEP_TMP=true` 保留临时目录。
 
-- 读取 `data_processed/` 下的所有样本
-- 建立标签映射
-- 按类别分层划分训练集和验证集
-- 训练 1D CNN
-- 绘制训练曲线
-- 在验证集上做评估
-- 保存模型与评估结果
+## 8. DeepSeek 语义增强说明
 
----
+DeepSeek 语义增强不在 Python 服务中完成。
 
-## 8. 输出结果说明
+Python 只返回：
 
-训练完成后，会在 `artifacts/` 目录下生成以下文件：
+- `rawSequence`
+- `rawDisplayZh`
+- `rawTextZh`
+- `segmentTopK`
 
-- `gesture_cnn.keras`：训练好的模型
-- `label_map.json`：标签映射
-- `training_curve.png`：训练曲线图
-- `confusion_matrix.png`：混淆矩阵图
-- `eval_result.txt`：验证集评估结果
+Spring Boot 根据这些字段调用 DeepSeek 快速非思考模型进行 deletion-only 语义后处理，并负责保存业务识别结果。
 
----
+## 9. 测试命令
 
-## 9. 模型结构
+健康检查：
 
-当前使用的是一个最小可跑通的 1D CNN：
-
-- `Conv1D(64, kernel_size=3, relu)`
-- `MaxPooling1D`
-- `Conv1D(128, kernel_size=3, relu)`
-- `GlobalAveragePooling1D`
-- `Dense(64, relu)`
-- `Dropout(0.3)`
-- `Dense(num_classes, softmax)`
-
-损失函数为：
-
-- `sparse_categorical_crossentropy`
-
-评价指标为：
-
-- `accuracy`
-
----
-
-## 10. 固定随机种子说明
-
-当前版本在 **数据集划分阶段** 固定了随机种子：
-
-- `split_dataset_stratified(..., seed=42)`
-
-并且在划分前调用了：
-
-```python
-np.random.seed(seed)
+```powershell
+curl.exe "http://127.0.0.1:8000/health"
 ```
 
-这意味着：
+实时单词识别：
 
-- 同一份数据集在当前版本下，训练集/验证集的划分顺序是可复现的
-- 每次重新运行训练脚本，只要数据不变，数据划分结果就保持一致
+```text
+ws://127.0.0.1:8000/ws/gesture
+```
 
-但需要注意：
+连接后先发送：
 
-- 当前版本只固定了 **NumPy 的数据划分随机性**
-- 还没有额外固定 Python、TensorFlow 等训练阶段的全部随机性
-- 因此训练结果可能仍会存在轻微波动
+```json
+{"type":"start"}
+```
 
-对于当前 1.0 版本，这样的控制已经足够用于稳定复现实验流程；后续如果需要更严格的完全复现，再进一步补充全链路随机种子控制即可。
+然后持续发送 JPEG bytes。
 
----
+句子视频识别：
 
-## 11. 当前版本特点
+```powershell
+curl.exe -X POST "http://127.0.0.1:8000/api/sentence/recognize" `
+  -F "file=@D:/datasets/WLASL-mini-v2-25/demo_videos_semantic/you_want_help_trimmed.mp4"
+```
 
-### 已完成
+响应会包含：
 
-- 单手手势数据采集
-- world landmarks 主特征方案
-- 尺度归一化
-- 角度余弦特征
-- 30 帧时序输入
-- 1D CNN 训练闭环
-- 训练曲线绘制
-- 验证集评估与混淆矩阵输出
+```json
+{
+  "status": "recognized",
+  "mode": "fast",
+  "rawSequence": ["you", "want", "help"],
+  "rawDisplayZh": ["你", "想要", "帮助"],
+  "rawTextZh": "你 想要 帮助",
+  "segmentTopK": [
+    {
+      "segmentIndex": 1,
+      "rawLabel": "you",
+      "rawLabelZh": "你",
+      "topK": [
+        {
+          "label": "you",
+          "labelZh": "你",
+          "avgProb": 0.7,
+          "maxProb": 0.9,
+          "hitCount": 18
+        }
+      ]
+    }
+  ],
+  "elapsedMs": 0
+}
+```
 
-### 当前版本定位
+## 10. 当前限制与后续计划
 
-当前版本是 **1.0 原型版**，重点是先把完整链路跑通并稳定下来，而不是一次性堆很多复杂功能。
-
----
-
-## 12. 后续可继续改进的方向
-
-- 增加更多 `unknown` 样本，提升拒识能力
-- 增加更多类别与更大样本量
-- 完善实时识别脚本与展示界面
-- 补充更完整的评估指标
-- 进一步固定训练阶段随机种子
-- 尝试双手手势与更复杂模型结构
-
----
-
-## 13. 版本说明
-
-当前仓库内容可视为 **1.0 版本基线**。
-
-这个版本的意义在于：
-
-- 已经拥有一条完整、可运行、可训练、可评估的手势识别原型链路
-- 代码结构相对清晰
-- 后续新增功能时有稳定基线可对照
+- 句子视频模型当前是单进程内存缓存；高并发时后续可增加推理锁、队列或独立推理服务。
+- 句子视频默认模型路径仍依赖本机 `D:/datasets/...`，部署时应使用环境变量覆盖。
+- `sentence_video/wlasl_pipeline` 是从实验目录复制来的当前可用推理链，后续可继续瘦身为更小的生产推理模块。
+- DeepSeek 语义后处理由 Spring Boot 完成，Python 不保存业务记录。
+- 多客户端 WebSocket 并发和句子视频并发仍需做压力测试。

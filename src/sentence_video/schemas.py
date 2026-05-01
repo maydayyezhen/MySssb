@@ -11,6 +11,7 @@ class SegmentTopKItem(BaseModel):
     labelZh: str
     avgProb: float | None = None
     maxProb: float | None = None
+    hitCount: int | None = None
 
 
 class SegmentResult(BaseModel):

@@ -30,6 +30,13 @@ def _float_env(name: str, default: float) -> float:
     return float(value)
 
 
+def _bool_env(name: str, default: bool) -> bool:
+    value = os.getenv(name, "").strip().lower()
+    if not value:
+        return default
+    return value in ("1", "true", "yes", "y", "on")
+
+
 @dataclass(frozen=True)
 class SentenceVideoConfig:
     """Runtime configuration for uploaded sentence-video recognition."""
@@ -47,6 +54,8 @@ class SentenceVideoConfig:
     min_segment_max_confidence: float
     same_label_merge_gap: int
     nms_suppress_radius: int
+    max_upload_mb: int
+    keep_tmp: bool
 
 
 def load_sentence_video_config() -> SentenceVideoConfig:
@@ -80,6 +89,8 @@ def load_sentence_video_config() -> SentenceVideoConfig:
         ),
         same_label_merge_gap=_int_env("SENTENCE_VIDEO_SAME_LABEL_MERGE_GAP", 8),
         nms_suppress_radius=_int_env("SENTENCE_VIDEO_NMS_SUPPRESS_RADIUS", 6),
+        max_upload_mb=_int_env("SENTENCE_VIDEO_MAX_UPLOAD_MB", 50),
+        keep_tmp=_bool_env("SENTENCE_VIDEO_KEEP_TMP", False),
     )
 
 
