@@ -8,14 +8,14 @@ Python 服务启动时：
 
 from typing import Dict
 
-from src.utils.runtime_model_registry import reload_runtime_model
-from src.utils.spring_boot_client import fetch_published_model_version
+from src.word_recognition.utils.runtime_model_registry import reload_runtime_model
+from src.word_recognition.utils.spring_boot_client import fetch_published_model_version
 
 from pathlib import Path
 from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
 
-from src.config.gesture_config import MODEL_FILE_NAME, LABEL_MAP_FILE_NAME
+from src.word_recognition.config.gesture_config import MODEL_FILE_NAME, LABEL_MAP_FILE_NAME
 
 
 def sanitize_runtime_name(value: str) -> str:
@@ -74,7 +74,7 @@ def bootstrap_runtime_model_from_backend() -> Dict:
 
     try:
         if model_url and label_map_url:
-            project_root = Path(__file__).resolve().parent.parent.parent
+            project_root = Path(__file__).resolve().parents[3]
             runtime_dir = project_root / "runtime_models" / sanitize_runtime_name(version_name)
 
             local_model_path = runtime_dir / MODEL_FILE_NAME

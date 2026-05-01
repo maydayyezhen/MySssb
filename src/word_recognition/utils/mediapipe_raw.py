@@ -10,7 +10,7 @@
 import numpy as np
 
 try:
-    from src.config.gesture_config import (
+    from src.word_recognition.config.gesture_config import (
         SWAP_HANDEDNESS,
         SWAP_POSE_LR,
         MIRROR_POSE_X,
@@ -18,9 +18,9 @@ try:
         RAW_REQUIRE_SHOULDERS,
         RAW_REQUIRE_HAND,
     )
-    from src.utils.pose_normalizer import normalize_mirrored_pose_xyzc
+    from src.word_recognition.utils.pose_normalizer import normalize_mirrored_pose_xyzc
 except ImportError:
-    from config.gesture_config import (
+    from word_recognition.config.gesture_config import (
         SWAP_HANDEDNESS,
         SWAP_POSE_LR,
         MIRROR_POSE_X,
@@ -28,7 +28,7 @@ except ImportError:
         RAW_REQUIRE_SHOULDERS,
         RAW_REQUIRE_HAND,
     )
-    from utils.pose_normalizer import normalize_mirrored_pose_xyzc
+    from word_recognition.utils.pose_normalizer import normalize_mirrored_pose_xyzc
 
 
 def normalize_handedness(label: str, swap_handedness: bool = SWAP_HANDEDNESS) -> str:

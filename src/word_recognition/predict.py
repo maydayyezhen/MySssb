@@ -8,26 +8,26 @@ import numpy as np
 import tensorflow as tf
 
 try:
-    from src.config.gesture_config import (
+    from src.word_recognition.config.gesture_config import (
         WINDOW_SIZE,
         MODEL_FILE_NAME,
         LABEL_MAP_FILE_NAME,
         SWAP_HANDEDNESS,
         SWAP_POSE_LR,
     )
-    from src.utils.hand_features import extract_arm_pose_frame_parts, build_arm_pose_sample
+    from src.word_recognition.utils.hand_features import extract_arm_pose_frame_parts, build_arm_pose_sample
 except ImportError:
-    from config.gesture_config import (
+    from word_recognition.config.gesture_config import (
         WINDOW_SIZE,
         MODEL_FILE_NAME,
         LABEL_MAP_FILE_NAME,
         SWAP_HANDEDNESS,
         SWAP_POSE_LR,
     )
-    from utils.hand_features import extract_arm_pose_frame_parts, build_arm_pose_sample
+    from word_recognition.utils.hand_features import extract_arm_pose_frame_parts, build_arm_pose_sample
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
 DEFAULT_MODEL_PATH = ARTIFACTS_DIR / MODEL_FILE_NAME
 DEFAULT_LABEL_MAP_PATH = ARTIFACTS_DIR / LABEL_MAP_FILE_NAME
@@ -63,7 +63,7 @@ class GesturePredictSession:
         }
 
         if model_path is None or label_map_path is None:
-            from src.utils.runtime_model_registry import (
+            from src.word_recognition.utils.runtime_model_registry import (
                 get_runtime_model_paths,
                 get_runtime_model_snapshot,
             )

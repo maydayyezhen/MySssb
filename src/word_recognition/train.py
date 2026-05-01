@@ -5,19 +5,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tensorflow.keras import layers, models, callbacks
 
-from src.utils.dataset_loader import (
+from src.word_recognition.utils.dataset_loader import (
     load_dataset,
     split_dataset_stratified,
     print_label_distribution
 )
 
-from src.config.gesture_config import (
+from src.word_recognition.config.gesture_config import (
     DATA_DIR_NAME,
     MODEL_FILE_NAME,
     LABEL_MAP_FILE_NAME,
 )
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 def plot_training_history(history, save_dir: Path):
     """绘制并保存训练曲线图。"""

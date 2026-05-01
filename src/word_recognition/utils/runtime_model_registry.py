@@ -12,7 +12,7 @@ from typing import Dict, Optional, Tuple
 
 import tensorflow as tf
 
-from src.predict import load_label_map
+from src.word_recognition.predict import load_label_map
 
 
 _current_model_path: Optional[Path] = None

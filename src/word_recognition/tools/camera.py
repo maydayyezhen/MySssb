@@ -1,7 +1,7 @@
 import cv2
 
-from config.gesture_config import WINDOW_SIZE
-from predict import GesturePredictSession
+from src.word_recognition.config.gesture_config import WINDOW_SIZE
+from src.word_recognition.predict import GesturePredictSession
 
 
 def draw_overlay(frame, result: dict):

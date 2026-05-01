@@ -22,13 +22,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tensorflow.keras import callbacks
 
-from src.config.gesture_config import (
+from src.word_recognition.config.gesture_config import (
     DATA_DIR_NAME,
     MODEL_FILE_NAME,
     LABEL_MAP_FILE_NAME,
 )
-from src.train import build_model, evaluate_on_validation
-from src.utils.dataset_loader import load_dataset, split_dataset_stratified
+from src.word_recognition.train import build_model, evaluate_on_validation
+from src.word_recognition.utils.dataset_loader import load_dataset, split_dataset_stratified
 
 
 def run_training(project_root: Path) -> Dict:

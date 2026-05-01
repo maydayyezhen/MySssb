@@ -1,7 +1,7 @@
 import numpy as np
 
 try:
-    from src.config.gesture_config import (
+    from src.word_recognition.config.gesture_config import (
         FEATURE_DIM,
         POSE_VISIBILITY_THRESHOLD,
         SWAP_HANDEDNESS,
@@ -9,7 +9,7 @@ try:
         MIRROR_POSE_X,
     )
 except ImportError:
-    from config.gesture_config import (
+    from word_recognition.config.gesture_config import (
         FEATURE_DIM,
         POSE_VISIBILITY_THRESHOLD,
         SWAP_HANDEDNESS,

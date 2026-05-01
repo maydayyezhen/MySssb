@@ -5,7 +5,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 
-from config.gesture_config import (
+from src.word_recognition.config.gesture_config import (
     WINDOW_SIZE,
     TARGET_FPS,
     SAMPLE_INTERVAL_SEC,
@@ -13,9 +13,9 @@ from config.gesture_config import (
     SWAP_HANDEDNESS,
     SWAP_POSE_LR,
 )
-from utils.hand_features import extract_arm_pose_frame_parts, build_arm_pose_sample
+from src.word_recognition.utils.hand_features import extract_arm_pose_frame_parts, build_arm_pose_sample
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 def get_next_sample_index(save_dir: Path) -> int:

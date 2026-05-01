@@ -15,7 +15,7 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 
-from src.config.gesture_config import (
+from src.word_recognition.config.gesture_config import (
     WINDOW_SIZE,
     FEATURE_DIM,
     DATA_DIR_NAME,

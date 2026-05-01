@@ -4,14 +4,14 @@ from pathlib import Path
 
 import numpy as np
 
-from src.config.gesture_config import (
+from src.word_recognition.config.gesture_config import (
     RAW_PHONE_DATA_DIR_NAME,
     DATA_DIR_NAME,
     EXPECTED_SAMPLE_SHAPE,
     POSE_VISIBILITY_THRESHOLD,
 )
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 RAW_ROOT = PROJECT_ROOT / RAW_PHONE_DATA_DIR_NAME
 FEATURE_ROOT = PROJECT_ROOT / DATA_DIR_NAME
 

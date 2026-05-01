@@ -3,9 +3,9 @@ from pathlib import Path
 import numpy as np
 
 try:
-    from src.config.gesture_config import EXPECTED_SAMPLE_SHAPE
+    from src.word_recognition.config.gesture_config import EXPECTED_SAMPLE_SHAPE
 except ImportError:
-    from config.gesture_config import EXPECTED_SAMPLE_SHAPE
+    from word_recognition.config.gesture_config import EXPECTED_SAMPLE_SHAPE
 
 
 def load_dataset(data_root: str):
