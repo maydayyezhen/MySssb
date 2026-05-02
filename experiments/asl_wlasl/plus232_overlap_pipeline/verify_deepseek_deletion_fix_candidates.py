@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -98,8 +99,27 @@ def load_segments_json(path_text: str) -> Dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def load_dense_rows(row: Dict[str, str]) -> List[Dict[str, str]]:
+    segments_path = Path(row.get("segments_json", ""))
+    case_name = str(row.get("case_name", "")).strip()
+    if not segments_path.exists() or not case_name:
+        return []
+
+    dense_path = segments_path.with_name(f"{case_name}_dense_predictions.csv")
+    if not dense_path.exists() and segments_path.name.endswith("_segments.json"):
+        dense_path = segments_path.with_name(
+            segments_path.name.replace("_segments.json", "_dense_predictions.csv")
+        )
+    if not dense_path.exists():
+        return []
+
+    with dense_path.open("r", encoding="utf-8-sig", newline="") as f:
+        return list(csv.DictReader(f))
+
+
 def build_segment_topk(row: Dict[str, str]) -> List[Dict[str, object]]:
     payload = load_segments_json(row.get("segments_json", ""))
+    dense_rows = load_dense_rows(row)
     segments = payload.get("segments", [])
     if not isinstance(segments, list):
         return []
@@ -119,11 +139,83 @@ def build_segment_topk(row: Dict[str, str]) -> List[Dict[str, object]]:
                 "rawLabelZh": label,
                 "avgConfidence": as_float(segment.get("avg_confidence")),
                 "maxConfidence": as_float(segment.get("max_confidence")),
-                "topK": [],
+                "topK": build_topk_items(segment, dense_rows),
             }
         )
 
     return segment_topk
+
+
+def build_topk_items(
+        segment: Dict[str, object],
+        dense_rows: Sequence[Dict[str, str]],
+        limit: int = 3) -> List[Dict[str, object]]:
+    buckets: Dict[str, List[float]] = {}
+
+    for row in dense_rows:
+        if not row_overlaps_segment(row, segment):
+            continue
+        for rank in range(1, limit + 1):
+            label = row.get(f"top{rank}_label") or row.get(f"top{rank}")
+            prob = as_float(row.get(f"top{rank}_prob"), default=-1.0)
+            if not label or prob < 0:
+                continue
+            buckets.setdefault(str(label).strip(), []).append(prob)
+
+    if not buckets:
+        label = str(segment.get("label", "")).strip()
+        if not label:
+            return []
+        return [
+            {
+                "label": label,
+                "labelZh": label,
+                "avgProb": as_float(segment.get("avg_confidence")),
+                "maxProb": as_float(segment.get("max_confidence")),
+                "hitCount": as_int(segment.get("window_count")),
+            }
+        ]
+
+    items = []
+    for label, values in buckets.items():
+        if not values:
+            continue
+        items.append(
+            {
+                "label": label,
+                "labelZh": label,
+                "avgProb": round(sum(values) / len(values), 6),
+                "maxProb": round(max(values), 6),
+                "hitCount": len(values),
+            }
+        )
+
+    return sorted(
+        items,
+        key=lambda item: (as_float(item.get("avgProb")), as_float(item.get("maxProb"))),
+        reverse=True,
+    )[:limit]
+
+
+def row_overlaps_segment(row: Dict[str, str], segment: Dict[str, object]) -> bool:
+    row_start = maybe_int(row.get("start_frame"))
+    row_end = maybe_int(row.get("end_frame"))
+    segment_start = maybe_int(segment.get("start_frame"))
+    segment_end = maybe_int(segment.get("end_frame"))
+
+    if row_start is None or row_end is None:
+        return False
+    if segment_start is None or segment_end is None:
+        return False
+
+    return max(row_start, segment_start) <= min(row_end, segment_end)
+
+
+def maybe_int(value: object) -> int | None:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
 
 
 def build_request_payload(row: Dict[str, str]) -> Dict[str, object]:
@@ -353,6 +445,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top_k", type=int, default=20)
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--auth_token", default="")
+    parser.add_argument("--output_prefix", default="")
     return parser.parse_args()
 
 
@@ -363,14 +456,27 @@ def main() -> None:
     if args.top_k > 0:
         rows = rows[:args.top_k]
 
-    verified_rows = [
-        verify_one(row, args.api_url, args.timeout, args.auth_token)
-        for row in rows
-    ]
+    verified_rows = []
+    for index, row in enumerate(rows, start=1):
+        print(
+            f"[progress] {index}/{len(rows)} "
+            f"{row.get('case_name', '')}",
+            flush=True,
+        )
+        auth_token = args.auth_token or os.environ.get("HEARBRIDGE_AUTH_TOKEN", "")
+        verified_rows.append(
+            verify_one(row, args.api_url, args.timeout, auth_token)
+        )
 
-    output_csv = output_dir / "deepseek_verified_deletion_fix_candidates.csv"
-    output_json = output_dir / "deepseek_verified_deletion_fix_candidates.json"
-    output_md = output_dir / "deepseek_verified_deletion_fix_demo.md"
+    if args.output_prefix.strip():
+        prefix = args.output_prefix.strip()
+        output_csv = output_dir / f"{prefix}.csv"
+        output_json = output_dir / f"{prefix}.json"
+        output_md = output_dir / f"{prefix}.md"
+    else:
+        output_csv = output_dir / "deepseek_verified_deletion_fix_candidates.csv"
+        output_json = output_dir / "deepseek_verified_deletion_fix_candidates.json"
+        output_md = output_dir / "deepseek_verified_deletion_fix_demo.md"
     manual_md = output_dir / "deepseek_verify_manual_request_examples.md"
 
     write_csv(output_csv, verified_rows, OUTPUT_FIELDS)

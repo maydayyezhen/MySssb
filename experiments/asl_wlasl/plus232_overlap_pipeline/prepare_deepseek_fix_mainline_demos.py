@@ -38,7 +38,8 @@ SELECTED_FIELDS = [
 DEFENSE_TEXT = (
     "前四条样例展示了视频手语识别模型在小词表场景下的基础识别能力，模型可以直接输出完整正确的词序列。"
     "后续修正样例用于展示系统的语义修正能力：原始滑窗识别结果中包含了目标词序列，但额外插入了冗余词。"
-    "后端语义修正模块采用 deletion-only 约束，只允许删除多余词，不允许凭空新增或替换词，"
+    "后端语义修正模块采用 TopK-constrained 约束，只允许按原词段顺序从每段 rawLabel 或 TopK 候选中选择，"
+    "并允许删除明显多余的词段，但不允许凭空新增词或重排序。"
     "因此可以在降低误修正风险的同时，将识别结果修正为更符合语义的最终序列。"
     "为了避免只用单个样例证明修正能力，本实验额外准备了多条修正演示样例，用于展示该机制在不同句子上的容错效果。"
 )
@@ -174,6 +175,7 @@ def normalize_theory_row(row: Dict[str, str]) -> Dict[str, object]:
 
 
 def load_rows(output_dir: Path) -> Tuple[List[Dict[str, object]], List[Dict[str, object]], int]:
+    topk_verified_path = output_dir / "deepseek_topk_verified_all_cases.csv"
     verified_path = output_dir / "deepseek_verified_deletion_fix_candidates.csv"
     theory_path = output_dir / "deletion_only_fix_candidates.csv"
 
@@ -185,6 +187,18 @@ def load_rows(output_dir: Path) -> Tuple[List[Dict[str, object]], List[Dict[str,
     ]
 
     verified_rows: List[Dict[str, object]] = []
+    if topk_verified_path.exists():
+        for row in read_csv(topk_verified_path):
+            expected = split_words(row.get("expected_sequence"))
+            corrected = split_words(row.get("corrected_sequence"))
+            if (
+                parse_bool(row.get("deepseek_verified"))
+                and corrected == expected
+                and not parse_bool(row.get("exact_match"))
+            ):
+                verified_rows.append(normalize_verified_row(row))
+        return verified_rows, theory_rows, len(verified_rows)
+
     if verified_path.exists():
         for row in read_csv(verified_path):
             expected = split_words(row.get("expected_sequence"))
@@ -315,8 +329,8 @@ def write_markdown_report(
         "",
         "## Summary",
         "",
-        f"- theoretical_deletion_only_candidates: {theory_total}",
-        f"- deepseek_verified_success_count: {verified_success_count}",
+        f"- candidate_pool_size: {theory_total}",
+        f"- topk_deepseek_verified_success_count: {verified_success_count}",
         f"- selected_demo_count: {len(selected_rows)}",
         f"- has_duplicate_sentence: {str(has_duplicate_sentence).lower()}",
         f"- has_not_verified_candidates: {str(has_unverified).lower()}",
